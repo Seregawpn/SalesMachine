@@ -15,7 +15,7 @@
 - Schema changes ship as numbered SQL files (`NNNN_description.sql`) applied in order, tracked in a `schema_version` table (05_Decisions_And_Amendments §3.7).
 - Opportunity pipeline stages, in order, are exactly: `Research`, `Ready to contact`, `Contacted`, `Replied`, `Meeting booked`, `Meeting completed`, `Interested`, `Pilot discussion`, `Proposal`, `Pilot`, `Paid`, `Closed` (01_Project_OS_Requirements §4). Stage history is never overwritten — every stage change is logged to `audit_log`.
 - Every active (non-`Closed`) opportunity must have a next action and due date, or the automation must flag it (03_Project_OS_Automation_Logic §1, §11).
-- LinkedIn state changes are always user-confirmed; the system never scrapes or bot-automates LinkedIn (05_Decisions_And_Amendments §3.1).
+- LinkedIn state is synced automatically via the user's Unipile account (a unified messaging API operating through the user's own authenticated LinkedIn session) using the exact same `set_linkedin_state(...)` function the manual UI buttons call, with `actor="unipile-sync"`; manual confirmation remains as a fallback/override, and every outbound LinkedIn send still requires explicit human approval before it goes out (05_Decisions_And_Amendments §3.1, REVISED). The Unipile API key is a live credential and must be stored in the macOS Keychain, never committed to source control (05_Decisions_And_Amendments §3.5).
 - UI is table-first: one record per row, fixed columns, no information conveyed by color alone, no required drag-and-drop, full keyboard operation, semantic `<table>` markup with real headers (04_Project_OS_UI_UX_Specification §3, §13, §18).
 - Daily local backup of the SQLite file, retaining the last 30 snapshots (05_Decisions_And_Amendments §3.4).
 - This is a new, standalone repository at `~/ProjectOS`, unrelated to any other project's git history or release process.
@@ -46,6 +46,10 @@
     scheduler.py
     backup.py
     daemon.py
+    integrations/
+      __init__.py
+      unipile_client.py
+      unipile_sync.py
     web/
       __init__.py
       app.py
@@ -79,6 +83,8 @@
     test_pipeline_routes.py
     test_linkedin_routes.py
     test_daemon.py
+    test_unipile_client.py
+    test_unipile_sync.py
 ```
 
 ---
@@ -2453,9 +2459,225 @@ Verify: `curl http://127.0.0.1:8765/action-center` returns 200 after logging out
 
 ---
 
+### Task 13: Unipile LinkedIn sync (REVISION — added after Task 6 landed)
+
+**Context for this revision:** Task 6 shipped LinkedIn tracking as fully manual (user clicks confirm buttons). After that landed, it turned out the user already has an active Unipile account — a third-party unified messaging API that reads/writes LinkedIn state through the user's own authenticated LinkedIn session. This task adds automatic sync on top of Task 6's foundation without replacing it: `set_linkedin_state(...)` (Task 6) stays the single code path for every state transition and its side effects (follow-up actions, audit log); this task adds a second caller of that same function (`actor="unipile-sync"`) alongside the existing manual UI caller (`actor="user"`). If Unipile becomes unavailable, the manual buttons from Task 6 keep working unchanged.
+
+**Files:**
+- Create: `src/project_os/integrations/__init__.py`
+- Create: `src/project_os/secrets.py`
+- Create: `src/project_os/integrations/unipile_client.py`
+- Create: `src/project_os/integrations/unipile_sync.py`
+- Modify: `pyproject.toml` (add `requests` dependency)
+- Modify: `src/project_os/daemon.py` (register the sync job in `build_scheduler`)
+- Test: `tests/test_secrets.py`
+- Test: `tests/test_unipile_client.py`
+- Test: `tests/test_unipile_sync.py`
+
+**Interfaces:**
+- Consumes: `set_linkedin_state`, `list_project_contacts` (Task 3/6), `Scheduler` (Task 7), `build_scheduler` (Task 11).
+- Produces: `secrets.get_api_key(service, account) -> str`, `secrets.set_api_key(service, account, api_key) -> None`; `UnipileClient(api_key, base_url=...)` with `.get_accounts() -> list[dict]`; `match_contact_by_linkedin_url(conn, project_id, linkedin_url) -> int | None` (returns a `project_contacts.id` or `None`); `sync_linkedin_states(conn, client, project_id) -> int` (returns count of contacts updated).
+
+**Before implementing the sync logic, do this research step first — do not skip it and do not guess:**
+
+The only Unipile endpoint confirmed so far is `GET /api/v1/accounts` (verified working: `curl --request GET --url https://api40.unipile.com:17075/api/v1/accounts --header 'X-API-KEY:<key>' --header 'accept: application/json'`). The endpoint(s) for reading a LinkedIn account's connections/relations and message threads are NOT yet confirmed. Before writing `unipile_sync.py`:
+
+1. Use WebFetch to look up Unipile's official API documentation (likely at `https://developer.unipile.com` or similar — search if the exact URL isn't obvious) for: (a) how to list a LinkedIn account's connections/relations and their state (pending/accepted), and (b) how to list message threads/chats and detect a new inbound reply.
+2. If you find clear, current documentation: implement `UnipileClient` methods for those endpoints, matching Unipile's actual response schema (do not invent field names — use exactly what the docs show).
+3. If the documentation is unclear, paywalled, requires an account you don't have, or you cannot confirm the exact endpoint/schema with confidence: **stop and report NEEDS_CONTEXT** with exactly what you found and what's missing. Do not fabricate an endpoint path or response shape — a wrong guess here would silently fail against the real API and no test would catch it, since the test would be validating your own guess.
+
+- [ ] **Step 1: Write the failing test for Keychain-backed secret storage**
+
+```python
+# tests/test_secrets.py
+import uuid
+
+from project_os.secrets import get_api_key, set_api_key
+
+
+def test_set_and_get_api_key_round_trips_through_keychain():
+    service = f"com.projectos.test.{uuid.uuid4().hex}"
+    account = "api_key"
+
+    set_api_key(service, account, "test-secret-value-123")
+    result = get_api_key(service, account)
+
+    assert result == "test-secret-value-123"
+
+
+def test_get_api_key_raises_clear_error_when_not_found():
+    service = f"com.projectos.test.nonexistent.{uuid.uuid4().hex}"
+
+    try:
+        get_api_key(service, "api_key")
+        assert False, "expected an exception for a missing keychain entry"
+    except LookupError as e:
+        assert service in str(e)
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `python -m pytest tests/test_secrets.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'project_os.secrets'`
+
+- [ ] **Step 3: Write `src/project_os/secrets.py`**
+
+```python
+import subprocess
+
+
+def set_api_key(service: str, account: str, api_key: str) -> None:
+    subprocess.run(
+        [
+            "security", "add-generic-password",
+            "-U",  # update if it already exists
+            "-s", service,
+            "-a", account,
+            "-w", api_key,
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+
+def get_api_key(service: str, account: str) -> str:
+    result = subprocess.run(
+        ["security", "find-generic-password", "-s", service, "-a", account, "-w"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise LookupError(
+            f"No Keychain entry found for service={service!r} account={account!r}"
+        )
+    return result.stdout.strip()
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `python -m pytest tests/test_secrets.py -v`
+Expected: PASS (2 tests). This test writes and reads real macOS Keychain entries under a random test service name — no cleanup is strictly required since each run uses a fresh UUID, but note in your report that a stray `com.projectos.test.*` Keychain entry may remain after the test run.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/project_os/secrets.py tests/test_secrets.py
+git commit -m "feat: macOS Keychain-backed secret storage"
+```
+
+- [ ] **Step 6: Add `requests` to `pyproject.toml` dependencies**
+
+Add `"requests>=2.31"` to the `dependencies` list in `pyproject.toml`, then run `pip install -e ".[dev]"` again to install it.
+
+- [ ] **Step 7: Write the failing test for `UnipileClient.get_accounts`**
+
+```python
+# tests/test_unipile_client.py
+from unittest.mock import patch, MagicMock
+
+from project_os.integrations.unipile_client import UnipileClient
+
+
+def test_get_accounts_sends_correct_request_and_parses_response():
+    client = UnipileClient(api_key="test-key", base_url="https://api40.unipile.com:17075/api/v1")
+
+    fake_response = MagicMock()
+    fake_response.json.return_value = {"items": [{"id": "acc_1", "type": "LINKEDIN"}]}
+    fake_response.raise_for_status.return_value = None
+
+    with patch("project_os.integrations.unipile_client.requests.get", return_value=fake_response) as mock_get:
+        accounts = client.get_accounts()
+
+    mock_get.assert_called_once_with(
+        "https://api40.unipile.com:17075/api/v1/accounts",
+        headers={"X-API-KEY": "test-key", "accept": "application/json"},
+        timeout=10,
+    )
+    assert accounts == [{"id": "acc_1", "type": "LINKEDIN"}]
+```
+
+This is the one place in this codebase where mocking is appropriate: `requests.get` is an external HTTP boundary, and the test verifies the request was built correctly and the response was parsed correctly — not internal business logic.
+
+- [ ] **Step 8: Run test to verify it fails**
+
+Run: `python -m pytest tests/test_unipile_client.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'project_os.integrations'`
+
+- [ ] **Step 9: Write `src/project_os/integrations/__init__.py`** (empty file)
+
+- [ ] **Step 10: Write `src/project_os/integrations/unipile_client.py`**
+
+```python
+import requests
+
+
+class UnipileClient:
+    def __init__(self, api_key: str, base_url: str = "https://api40.unipile.com:17075/api/v1"):
+        self.api_key = api_key
+        self.base_url = base_url
+
+    def _headers(self) -> dict:
+        return {"X-API-KEY": self.api_key, "accept": "application/json"}
+
+    def get_accounts(self) -> list[dict]:
+        response = requests.get(
+            f"{self.base_url}/accounts",
+            headers=self._headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data["items"] if isinstance(data, dict) and "items" in data else data
+```
+
+- [ ] **Step 11: Run test to verify it passes**
+
+Run: `python -m pytest tests/test_unipile_client.py -v`
+Expected: PASS (1 test)
+
+- [ ] **Step 12: Commit**
+
+```bash
+git add pyproject.toml src/project_os/integrations/__init__.py src/project_os/integrations/unipile_client.py tests/test_unipile_client.py
+git commit -m "feat: Unipile API client (accounts endpoint)"
+```
+
+- [ ] **Step 13: Do the research step described above**, then write the failing tests for `sync_linkedin_states` and `match_contact_by_linkedin_url` in `tests/test_unipile_sync.py`, following the same TDD pattern as every prior task (real SQLite via `tmp_db_path` + `run_migrations`, mocked `UnipileClient` for the HTTP boundary only). Cover at minimum: a contact whose `linkedin_url` matches a returned relation gets its state updated via `set_linkedin_state` with `actor="unipile-sync"`; a returned relation with no matching `linkedin_url` in the project is skipped (not an error); running sync twice with unchanged data does not create duplicate audit_log entries (relies on Task 6's own state-transition logic being a no-op when the state doesn't change — if it currently always writes an audit row even for a same-state "transition," treat that as a real gap to fix in this task, not something to route around, since it would otherwise flood the audit log every sync interval).
+
+- [ ] **Step 14: Implement `match_contact_by_linkedin_url` and `sync_linkedin_states` in `src/project_os/integrations/unipile_sync.py`**, using the endpoint(s) and response schema you confirmed in Step 13's research. Run the tests, fix until green.
+
+- [ ] **Step 15: Run the full suite to check for regressions**
+
+Run: `python -m pytest -v`
+Expected: all tests pass.
+
+- [ ] **Step 16: Commit**
+
+```bash
+git add src/project_os/integrations/unipile_sync.py tests/test_unipile_sync.py
+git commit -m "feat: sync LinkedIn state from Unipile"
+```
+
+- [ ] **Step 17: Wire the sync job into the daemon.** Modify `src/project_os/daemon.py`'s `build_scheduler` to register a new job (interval: every 15 minutes, matching `pipeline_consistency`) that reads the Unipile API key via `secrets.get_api_key("com.projectos.unipile", "api_key")`, builds a `UnipileClient`, and calls `sync_linkedin_states` for every active project. If the Keychain entry doesn't exist yet (fresh install, key not yet configured), catch the `LookupError` and skip the sync job silently for that run rather than crashing the daemon — log it, don't raise.
+
+- [ ] **Step 18: Run the full suite one more time, commit the daemon change**
+
+```bash
+git add src/project_os/daemon.py
+git commit -m "feat: wire Unipile sync job into the daemon scheduler"
+```
+
+- [ ] **Step 19: Store the real API key** (manual step, not code): run this once on the target Mac, outside of any committed script, to put the real key into the Keychain — never write the literal key value into a file in this repository:
+
+```bash
+python3 -c "from project_os.secrets import set_api_key; set_api_key('com.projectos.unipile', 'api_key', input('Unipile API key: '))"
+```
+
+---
+
 ## Self-Review Notes
 
-- **Spec coverage:** CRM normalization + multi-project (01 §2–3, §15) → Tasks 1–3. Pipeline with preserved history (01 §4) → Task 4. Action Center + unified priority (01 §2, 03 §9) → Task 5, 8. Missing-next-action detection (03 §1, §11) → Task 5. Manual LinkedIn tracking (01 §6, 05 §3.1) → Task 6, 10. Daily backups (05 §3.4) → Task 7. Numbered migrations + schema_version (05 §3.7) → Task 1, 6. Table-first, keyboard/VoiceOver-friendly UI, no drag-and-drop (04 §3, §13, §18) → Tasks 8–10, verified in Task 12. LaunchAgent daemon, local-only (02 §17–18, 05 §2.1) → Task 11.
-- **Explicitly out of scope for Phase 1** (deferred to later phases per 02 §13): Gmail sync, Calendar sync, AI drafting/classification, research campaigns, funding intelligence, Product module, Goals module, secrets/Keychain integration (not needed until an external integration exists), send-mistake recovery flow (needs sent-email tracking from Phase 2).
-- **Placeholder scan:** no TBD/TODO markers; every step has runnable code.
-- **Type consistency:** `create_action` signature (Task 5) matches every call site in Tasks 5, 6, and 11. `list_open_actions` return type (`list[sqlite3.Row]`) is consistent everywhere it's consumed (Tasks 8, 9, 11). `STAGES` from Task 4 is the single source used by Task 9's dropdown — no duplicate stage list.
+- **Spec coverage:** CRM normalization + multi-project (01 §2–3, §15) → Tasks 1–3. Pipeline with preserved history (01 §4) → Task 4. Action Center + unified priority (01 §2, 03 §9) → Task 5, 8. Missing-next-action detection (03 §1, §11) → Task 5. LinkedIn tracking, manual + Unipile-synced (01 §6, 05 §3.1 REVISED) → Task 6, 10, 13. Daily backups (05 §3.4) → Task 7. Numbered migrations + schema_version (05 §3.7) → Task 1, 6. Table-first, keyboard/VoiceOver-friendly UI, no drag-and-drop (04 §3, §13, §18) → Tasks 8–10, verified in Task 12. LaunchAgent daemon, local-only (02 §17–18, 05 §2.1) → Task 11. Secrets in macOS Keychain (05 §3.5) → Task 13.
+- **Explicitly out of scope for Phase 1** (deferred to later phases per 02 §13): Gmail sync, Calendar sync, AI drafting/classification, research campaigns, funding intelligence, Product module, Goals module, send-mistake recovery flow (needs sent-email tracking from Phase 2). Keychain-based secrets storage moved into scope as Task 13, ahead of schedule, because Unipile needed it immediately.
+- **Placeholder scan:** no TBD/TODO markers; every step has runnable code except Task 13's Step 13–14, which deliberately requires the implementer to research the real Unipile endpoint before writing code rather than transcribing a guessed one — flagged explicitly in the task text, not a silent gap.
+- **Type consistency:** `create_action` signature (Task 5) matches every call site in Tasks 5, 6, 13, and 11. `list_open_actions` return type (`list[sqlite3.Row]`) is consistent everywhere it's consumed (Tasks 8, 9, 11). `STAGES` from Task 4 is the single source used by Task 9's dropdown — no duplicate stage list. `set_linkedin_state` (Task 6) is called with `actor="user"` from Task 10's routes and `actor="unipile-sync"` from Task 13 — same function, same side effects, two callers.
