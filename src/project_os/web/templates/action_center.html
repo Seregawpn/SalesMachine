@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Action Center — Project OS{% endblock %}
+{% block content %}
+<h2>Action Center</h2>
+<table>
+  <caption class="sr-only">Open actions across all projects</caption>
+  <thead>
+    <tr>
+      <th scope="col">Priority</th>
+      <th scope="col">Area</th>
+      <th scope="col">Reason</th>
+      <th scope="col">Due</th>
+      <th scope="col">Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for action in actions %}
+    <tr>
+      <td>{{ action["priority"] }}</td>
+      <td>{{ action["module"] }}</td>
+      <td>{{ action["reason"] }}</td>
+      <td>{{ action["due_date"] or "Unknown" }}</td>
+      <td>
+        <form method="post" action="/actions/{{ action['id'] }}/complete">
+          <button type="submit">Done</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">Nothing needs attention right now.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
