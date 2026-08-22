@@ -1,6 +1,6 @@
 import sqlite3
 
-from project_os.repositories.actions import create_action
+from project_os.repositories.actions import create_action, has_open_action_for
 
 LINKEDIN_STATES = [
     "Not started",
@@ -25,6 +25,8 @@ def set_linkedin_state(
         "SELECT project_id, linkedin_state FROM project_contacts WHERE id = ?",
         (project_contact_id,),
     ).fetchone()
+    if row is None:
+        raise ValueError(f"No project_contact with id {project_contact_id}")
     project_id = row["project_id"]
     old_state = row["linkedin_state"]
 
@@ -45,17 +47,21 @@ def set_linkedin_state(
     )
 
     if new_state == "Accepted":
-        create_action(
-            conn, project_id, module="Sales",
-            reason="Prepare first LinkedIn message", priority="P2",
-            linked_table="project_contacts", linked_id=project_contact_id,
-        )
+        reason = "Prepare first LinkedIn message"
+        if not has_open_action_for(conn, "project_contacts", project_contact_id, reason):
+            create_action(
+                conn, project_id, module="Sales",
+                reason=reason, priority="P2",
+                linked_table="project_contacts", linked_id=project_contact_id,
+            )
     elif new_state == "Pending Connection":
-        create_action(
-            conn, project_id, module="Sales",
-            reason="Re-check LinkedIn connection status", priority="P3",
-            linked_table="project_contacts", linked_id=project_contact_id,
-        )
+        reason = "Re-check LinkedIn connection status"
+        if not has_open_action_for(conn, "project_contacts", project_contact_id, reason):
+            create_action(
+                conn, project_id, module="Sales",
+                reason=reason, priority="P3",
+                linked_table="project_contacts", linked_id=project_contact_id,
+            )
 
 
 def list_linkedin_queue(conn: sqlite3.Connection, project_id: int) -> dict[str, list[sqlite3.Row]]:

@@ -25,6 +25,12 @@ def test_rejects_unknown_state(tmp_db_path):
         set_linkedin_state(conn, pc_id, "Bogus State")
 
 
+def test_rejects_invalid_project_contact_id(tmp_db_path):
+    conn, project_id, pc_id = _setup(tmp_db_path)
+    with pytest.raises(ValueError, match="No project_contact with id"):
+        set_linkedin_state(conn, 999, "Accepted")
+
+
 def test_accepted_creates_prepare_message_action(tmp_db_path):
     conn, project_id, pc_id = _setup(tmp_db_path)
     set_linkedin_state(conn, pc_id, "Accepted")
@@ -60,3 +66,14 @@ def test_linkedin_states_include_spec_values():
         "Not started", "Pending Connection", "Accepted",
         "Message Sent", "Replied", "Not relevant",
     ]
+
+
+def test_duplicate_action_prevention_on_repeated_state(tmp_db_path):
+    conn, project_id, pc_id = _setup(tmp_db_path)
+    set_linkedin_state(conn, pc_id, "Accepted")
+    set_linkedin_state(conn, pc_id, "Message Sent")
+    set_linkedin_state(conn, pc_id, "Accepted")
+
+    actions = list_open_actions(conn, project_id)
+    prepare_actions = [a for a in actions if a["reason"] == "Prepare first LinkedIn message"]
+    assert len(prepare_actions) == 1
