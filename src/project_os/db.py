@@ -36,11 +36,12 @@ def run_migrations(conn: sqlite3.Connection, migrations_dir: Path) -> int:
         if number <= current:
             continue
         sql = path.read_text()
-        # Temporarily switch to deferred isolation to handle transactions
-        old_isolation = conn.isolation_level
-        conn.isolation_level = "DEFERRED"
+        statements = [s.strip() for s in sql.split(";") if s.strip()]
+
+        conn.execute("BEGIN")
         try:
-            conn.executescript(sql)
+            for statement in statements:
+                conn.execute(statement)
             conn.execute(
                 "INSERT INTO schema_version (version) VALUES (?)", (number,)
             )
@@ -48,8 +49,6 @@ def run_migrations(conn: sqlite3.Connection, migrations_dir: Path) -> int:
         except Exception:
             conn.rollback()
             raise
-        finally:
-            conn.isolation_level = old_isolation
         current = number
 
     return current
