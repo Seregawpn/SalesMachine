@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Pipeline — Project OS{% endblock %}
+{% block content %}
+<h2>Pipeline</h2>
+<table>
+  <caption class="sr-only">Opportunities grouped by stage</caption>
+  <thead>
+    <tr>
+      <th scope="col">Organization</th>
+      <th scope="col">Contact</th>
+      <th scope="col">Stage</th>
+      <th scope="col">Value</th>
+      <th scope="col">Blocker</th>
+      <th scope="col">Next action</th>
+      <th scope="col">Due</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for opp in opportunities %}
+    <tr>
+      <td>{{ opp["organization_name"] or "Unknown" }}</td>
+      <td>{{ opp["contact_name"] or "Unknown" }}</td>
+      <td>
+        <form method="post" action="/projects/{{ project_id }}/pipeline/{{ opp['id'] }}/stage">
+          <label for="stage-{{ opp['id'] }}" class="sr-only">Stage for {{ opp["organization_name"] }}</label>
+          <select id="stage-{{ opp['id'] }}" name="stage" onchange="this.form.submit()">
+            {% for stage in stages %}
+            <option value="{{ stage }}" {% if stage == opp["stage"] %}selected{% endif %}>{{ stage }}</option>
+            {% endfor %}
+          </select>
+          <noscript><button type="submit">Update stage</button></noscript>
+        </form>
+      </td>
+      <td>{{ opp["value"] or "Unknown" }}</td>
+      <td>{{ opp["blocker"] or "None" }}</td>
+      <td>{{ opp["next_action"] or "Unknown" }}</td>
+      <td>{{ opp["next_action_due"] or "Unknown" }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7">No opportunities yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

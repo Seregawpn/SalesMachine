@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ project["name"] }} — Project OS{% endblock %}
+{% block content %}
+<h2>{{ project["name"] }}</h2>
+<section aria-labelledby="needs-attention-heading">
+  <h3 id="needs-attention-heading">Needs attention</h3>
+  <table>
+    <caption class="sr-only">P0 and P1 actions for {{ project["name"] }}</caption>
+    <thead>
+      <tr>
+        <th scope="col">Priority</th>
+        <th scope="col">Reason</th>
+        <th scope="col">Due</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for action in needs_attention %}
+      <tr>
+        <td>{{ action["priority"] }}</td>
+        <td>{{ action["reason"] }}</td>
+        <td>{{ action["due_date"] or "Unknown" }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3">Nothing critical right now.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+<p><a href="/projects/{{ project['id'] }}/pipeline">Open Sales Pipeline</a></p>
+{% endblock %}
