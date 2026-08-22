@@ -58,3 +58,22 @@ def test_project_overview_shows_needs_attention_actions(tmp_db_path):
 
     assert response.status_code == 200
     assert "Needs attention" in response.text
+
+
+def test_changing_stage_to_invalid_value_returns_400(tmp_db_path):
+    client, project_id, opp_id = _client(tmp_db_path)
+
+    response = client.post(
+        f"/projects/{project_id}/pipeline/{opp_id}/stage",
+        data={"stage": "Not A Real Stage"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_project_overview_for_nonexistent_project_returns_404(tmp_db_path):
+    client, project_id, opp_id = _client(tmp_db_path)
+
+    response = client.get(f"/projects/{project_id + 999}")
+
+    assert response.status_code == 404

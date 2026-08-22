@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Form
+from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import RedirectResponse
 
 from project_os.db import get_connection
@@ -23,6 +23,10 @@ def pipeline(request: Request, project_id: int):
 @router.post("/projects/{project_id}/pipeline/{opportunity_id}/stage")
 def change_stage(request: Request, project_id: int, opportunity_id: int, stage: str = Form(...)):
     conn = get_connection(request.app.state.db_path)
-    update_stage(conn, opportunity_id, stage, actor="user")
+    try:
+        update_stage(conn, opportunity_id, stage, actor="user")
+    except ValueError as e:
+        conn.close()
+        raise HTTPException(status_code=400, detail=str(e))
     conn.close()
     return RedirectResponse(url=f"/projects/{project_id}/pipeline", status_code=303)
