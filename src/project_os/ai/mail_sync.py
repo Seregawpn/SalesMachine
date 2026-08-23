@@ -143,7 +143,7 @@ def sync_mail_replies(
             if get_project_contact(conn, project_id, contact_id) is None:
                 link_contact_to_project(conn, project_id, contact_id)
 
-            create_interaction(
+            interaction_id = create_interaction(
                 conn, project_id, contact_id,
                 channel="email", direction="inbound", subject=reply["subject"],
                 ai_summary=reply["summary"], intent=reply["intent"],
@@ -156,6 +156,7 @@ def sync_mail_replies(
                 due_date=reply["due_date"],
                 linked_table="contacts", linked_id=contact_id,
                 suggested_message=reply["draft_reply"],
+                source_interaction_id=interaction_id,
             )
             conn.commit()
         except Exception:

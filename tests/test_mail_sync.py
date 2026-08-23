@@ -176,6 +176,7 @@ def test_sync_mail_replies_creates_a_new_contact_interaction_and_action(tmp_db_p
     assert len(actions) == 1
     assert actions[0]["priority"] == "P1"
     assert actions[0]["suggested_message"] == "Happy to set up a demo — does Thursday work?"
+    assert actions[0]["source_interaction_id"] == interaction["id"]
 
 
 def test_sync_mail_replies_reuses_an_existing_contact(tmp_db_path):
