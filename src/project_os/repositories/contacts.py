@@ -21,6 +21,12 @@ def create_contact(
     return cur.lastrowid
 
 
+def get_contact_by_email(conn: sqlite3.Connection, email: str) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM contacts WHERE LOWER(email) = LOWER(?)", (email,)
+    ).fetchone()
+
+
 def link_contact_to_project(
     conn: sqlite3.Connection,
     project_id: int,

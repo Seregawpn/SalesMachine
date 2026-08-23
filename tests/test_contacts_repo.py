@@ -8,6 +8,7 @@ from project_os.repositories.contacts import (
     link_contact_to_project,
     get_project_contact,
     list_project_contacts,
+    get_contact_by_email,
 )
 
 MIGRATIONS_DIR = Path(__file__).parent.parent / "src" / "project_os" / "migrations"
@@ -60,3 +61,15 @@ def test_list_project_contacts(tmp_db_path):
 
     rows = list_project_contacts(conn, project_id)
     assert {r["name"] for r in rows} == {"Jane Smith", "John Doe"}
+
+
+def test_get_contact_by_email_finds_existing_contact(tmp_db_path):
+    conn = _conn(tmp_db_path)
+    create_contact(conn, "Jane Smith", email="Jane@Example.org")
+
+    found = get_contact_by_email(conn, "jane@example.org")
+    missing = get_contact_by_email(conn, "nobody@example.org")
+
+    assert found is not None
+    assert found["name"] == "Jane Smith"
+    assert missing is None
