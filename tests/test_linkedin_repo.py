@@ -68,6 +68,22 @@ def test_linkedin_states_include_spec_values():
     ]
 
 
+def test_no_op_transition_does_not_duplicate_audit_log(tmp_db_path):
+    conn, project_id, pc_id = _setup(tmp_db_path)
+
+    set_linkedin_state(conn, pc_id, "Accepted")
+    set_linkedin_state(conn, pc_id, "Accepted")  # no-op: same state again
+
+    audit_rows = conn.execute(
+        """
+        SELECT * FROM audit_log
+        WHERE entity_table = 'project_contacts' AND entity_id = ? AND field = 'linkedin_state'
+        """,
+        (pc_id,),
+    ).fetchall()
+    assert len(audit_rows) == 1
+
+
 def test_duplicate_action_prevention_on_repeated_state(tmp_db_path):
     conn, project_id, pc_id = _setup(tmp_db_path)
     set_linkedin_state(conn, pc_id, "Accepted")
