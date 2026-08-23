@@ -20,7 +20,7 @@ DB_PATH = str(Path.home() / "ProjectOS" / "data" / "project_os.sqlite")
 BACKUP_DIR = Path.home() / "ProjectOS" / "data" / "backups"
 
 
-def build_scheduler(db_path: str, backup_dir: Path) -> Scheduler:
+def build_scheduler(db_path: str, backup_dir: Path, include_unipile: bool = True) -> Scheduler:
     scheduler = Scheduler()
 
     def _backup_job() -> None:
@@ -48,7 +48,8 @@ def build_scheduler(db_path: str, backup_dir: Path) -> Scheduler:
 
     scheduler.register("backup", interval_seconds=24 * 60 * 60, func=_backup_job)
     scheduler.register("pipeline_consistency", interval_seconds=15 * 60, func=_consistency_job)
-    scheduler.register("unipile_sync", interval_seconds=15 * 60, func=_unipile_sync_job)
+    if include_unipile:
+        scheduler.register("unipile_sync", interval_seconds=15 * 60, func=_unipile_sync_job)
     return scheduler
 
 
@@ -61,7 +62,10 @@ def main() -> None:
 
     def _scheduler_loop() -> None:
         while True:
-            scheduler.run_pending()
+            try:
+                scheduler.run_pending()
+            except Exception:
+                logger.exception("scheduler loop iteration failed")
             time.sleep(60)
 
     threading.Thread(target=_scheduler_loop, daemon=True).start()

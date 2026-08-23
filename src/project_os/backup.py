@@ -1,5 +1,5 @@
 import datetime
-import shutil
+import sqlite3
 from pathlib import Path
 
 
@@ -8,7 +8,15 @@ def run_backup(db_path: str, backup_dir: Path, now: datetime.date | None = None)
     backup_dir.mkdir(parents=True, exist_ok=True)
     day = now or datetime.date.today()
     dest = backup_dir / f"{day.isoformat()}.sqlite"
-    shutil.copyfile(db_path, dest)
+
+    source_conn = sqlite3.connect(db_path)
+    dest_conn = sqlite3.connect(dest)
+    try:
+        source_conn.backup(dest_conn)
+    finally:
+        dest_conn.close()
+        source_conn.close()
+
     return dest
 
 

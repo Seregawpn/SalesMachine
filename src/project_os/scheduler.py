@@ -1,6 +1,9 @@
+import logging
 import time
 from dataclasses import dataclass
 from typing import Callable
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -23,7 +26,11 @@ class Scheduler:
         ran = []
         for job in self._jobs:
             if current - job.last_run >= job.interval_seconds:
-                job.func()
                 job.last_run = current
+                try:
+                    job.func()
+                except Exception:
+                    logger.exception("scheduled job %r failed", job.name)
+                    continue
                 ran.append(job.name)
         return ran

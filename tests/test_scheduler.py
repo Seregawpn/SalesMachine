@@ -34,3 +34,20 @@ def test_run_pending_runs_job_again_after_interval_elapses():
 
     assert ran_later == ["backup"]
     assert calls == ["backup", "backup"]
+
+
+def test_run_pending_isolates_a_failing_job_from_others():
+    calls = []
+    scheduler = Scheduler()
+
+    def _boom():
+        raise RuntimeError("simulated failure")
+
+    scheduler.register("broken", interval_seconds=60, func=_boom)
+    scheduler.register("healthy", interval_seconds=60, func=lambda: calls.append("healthy"))
+
+    ran = scheduler.run_pending(now=1000.0)
+
+    assert "healthy" in ran
+    assert "broken" not in ran
+    assert calls == ["healthy"]
