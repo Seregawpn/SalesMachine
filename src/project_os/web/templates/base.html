@@ -4,18 +4,23 @@
   <meta charset="utf-8">
   <title>{% block title %}Project OS{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/vendor/htmx.min.js"></script>
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
-  <header>
-    <h1>Project OS</h1>
-    <nav aria-label="Primary">
-      <a href="/action-center">Action Center</a>
-      <a href="/projects">Projects</a>
-    </nav>
-  </header>
-  <main id="main">
-    {% block content %}{% endblock %}
-  </main>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <h1>Project OS</h1>
+      <nav aria-label="Primary">
+        <a href="/action-center">Action Center</a>
+        <a href="/projects">Projects</a>
+        <a href="/contacts">Contacts</a>
+        <a href="/interactions">Interactions</a>
+      </nav>
+    </aside>
+    <main id="main" class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
 </body>
 </html>
