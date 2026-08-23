@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}LinkedIn — Project OS{% endblock %}
+{% block content %}
+<h2>LinkedIn</h2>
+
+<section aria-labelledby="to-connect-heading">
+  <h3 id="to-connect-heading">To connect</h3>
+  <table>
+    <thead><tr><th scope="col">Name</th><th scope="col">Action</th></tr></thead>
+    <tbody>
+      {% for row in queue["to_connect"] %}
+      <tr>
+        <td>{{ row["name"] }}</td>
+        <td>
+          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state">
+            <input type="hidden" name="state" value="Pending Connection">
+            <button type="submit">Connection sent</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="2">Nothing to connect with right now.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section aria-labelledby="pending-heading">
+  <h3 id="pending-heading">Pending connections to re-check</h3>
+  <table>
+    <thead><tr><th scope="col">Name</th><th scope="col">Action</th></tr></thead>
+    <tbody>
+      {% for row in queue["pending_recheck"] %}
+      <tr>
+        <td>{{ row["name"] }}</td>
+        <td>
+          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state">
+            <input type="hidden" name="state" value="Accepted">
+            <button type="submit">Accepted</button>
+          </form>
+          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state">
+            <input type="hidden" name="state" value="Not relevant">
+            <button type="submit">Not relevant</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="2">Nothing pending.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section aria-labelledby="awaiting-message-heading">
+  <h3 id="awaiting-message-heading">Accepted connections awaiting a message</h3>
+  <table>
+    <thead><tr><th scope="col">Name</th><th scope="col">Action</th></tr></thead>
+    <tbody>
+      {% for row in queue["awaiting_message"] %}
+      <tr>
+        <td>{{ row["name"] }}</td>
+        <td>
+          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state">
+            <input type="hidden" name="state" value="Message Sent">
+            <button type="submit">Message sent</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="2">Nobody waiting on a message.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section aria-labelledby="awaiting-reply-heading">
+  <h3 id="awaiting-reply-heading">Conversations awaiting reply</h3>
+  <table>
+    <thead><tr><th scope="col">Name</th><th scope="col">Action</th></tr></thead>
+    <tbody>
+      {% for row in queue["awaiting_reply"] %}
+      <tr>
+        <td>{{ row["name"] }}</td>
+        <td>
+          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state">
+            <input type="hidden" name="state" value="Replied">
+            <button type="submit">Replied</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="2">No open conversations.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

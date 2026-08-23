@@ -28,6 +28,9 @@ def create_app(db_path: str) -> FastAPI:
     app.include_router(projects_router)
     app.include_router(pipeline_router)
 
+    from project_os.web.routes_linkedin import router as linkedin_router
+    app.include_router(linkedin_router)
+
     return app
 
 
