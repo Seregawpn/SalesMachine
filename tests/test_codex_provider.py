@@ -1,6 +1,12 @@
+import sys
+from pathlib import Path
+
 import pytest
 
 from project_os.ai.codex_provider import CodexProvider, CodexProviderError
+from project_os.ai.process_transport import ProcessTransport, TransportTimeout
+
+FIXTURE_SCRIPT = Path(__file__).parent / "fixtures" / "fake_app_server.py"
 
 
 class FakeTransport:
@@ -22,6 +28,14 @@ class FakeTransport:
 
     def close(self) -> None:
         self.closed = True
+
+
+class TimeoutFakeTransport(FakeTransport):
+    """A LineTransport whose read_line always raises TransportTimeout,
+    simulating a slow-but-alive process rather than a closed one."""
+
+    def read_line(self, timeout: float | None = None) -> str | None:
+        raise TransportTimeout(f"No line received within {timeout}s (process is still running).")
 
 
 def _initialize_response_line() -> str:
@@ -126,3 +140,49 @@ def test_for_codex_cli_builds_a_provider_with_a_process_transport():
 
     command = CodexProvider._codex_cli_command("codex", "gpt-5.5")
     assert command == ["codex", "app-server", "--stdio", "-c", 'model="gpt-5.5"']
+
+
+def test_init_raises_codex_provider_error_when_initialize_times_out():
+    """If the transport times out (process alive, no response yet) while
+    waiting for the initialize response, __init__ must not hang or treat
+    it as a closed connection — it should raise a clear timeout error."""
+    transport = TimeoutFakeTransport([])
+
+    with pytest.raises(CodexProviderError, match="timed out"):
+        CodexProvider(transport, timeout=0.01)
+
+
+def test_init_still_raises_closed_connection_error_on_genuine_eof():
+    """A transport returning None (genuine EOF, not a timeout) should still
+    produce the original 'closed the connection' message, unchanged."""
+    transport = FakeTransport([])  # empty list -> read_line returns None
+
+    with pytest.raises(CodexProviderError, match="closed the connection"):
+        CodexProvider(transport)
+
+
+def test_for_codex_cli_closes_transport_and_does_not_leak_process_on_init_failure(monkeypatch):
+    """If CodexProvider construction fails (e.g. the initialize handshake
+    times out), for_codex_cli must close the transport it already spawned
+    rather than leaking the subprocess."""
+    created: dict[str, ProcessTransport] = {}
+    original_init = ProcessTransport.__init__
+
+    def spy_init(self, command):
+        original_init(self, command)
+        created["transport"] = self
+
+    monkeypatch.setattr(ProcessTransport, "__init__", spy_init)
+    monkeypatch.setattr(
+        CodexProvider,
+        "_codex_cli_command",
+        staticmethod(lambda codex_path, model: [sys.executable, str(FIXTURE_SCRIPT)]),
+    )
+
+    # fake_app_server.py never replies to "initialize", so this times out
+    # quickly while the subprocess is still alive.
+    with pytest.raises(CodexProviderError):
+        CodexProvider.for_codex_cli(timeout=0.2)
+
+    transport = created["transport"]
+    assert transport._process.poll() is not None, "subprocess was leaked instead of being closed"

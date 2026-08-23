@@ -6,6 +6,12 @@ import threading
 _END_OF_STREAM = object()
 
 
+class TransportTimeout(Exception):
+    """Raised by read_line when no line arrives within the given timeout
+    while the underlying process is still alive (as opposed to a real
+    EOF, which is signaled by read_line returning None)."""
+
+
 class ProcessTransport:
     """A LineTransport backed by a real subprocess speaking line-delimited JSON."""
 
@@ -44,7 +50,9 @@ class ProcessTransport:
         try:
             line = self._lines.get(timeout=timeout)
         except queue.Empty:
-            return None
+            raise TransportTimeout(
+                f"No line received within {timeout}s (process is still running)."
+            ) from None
         if line is _END_OF_STREAM:
             return None
         return line

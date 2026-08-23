@@ -1,7 +1,7 @@
 from typing import Any, Protocol
 
 from project_os.ai import codex_protocol
-from project_os.ai.process_transport import ProcessTransport
+from project_os.ai.process_transport import ProcessTransport, TransportTimeout
 
 DEFAULT_DEVELOPER_INSTRUCTIONS = (
     "You are a backend text-processing worker for a sales CRM. "
@@ -23,9 +23,10 @@ class LineTransport(Protocol):
 class CodexProvider:
     """Runs one-shot text tasks through a Codex app-server transport."""
 
-    def __init__(self, transport: LineTransport) -> None:
+    def __init__(self, transport: LineTransport, *, timeout: float = 30.0) -> None:
         self._transport = transport
         self._next_id = 1
+        self._timeout = timeout
         self._initialize()
 
     @staticmethod
@@ -33,7 +34,9 @@ class CodexProvider:
         return [codex_path, "app-server", "--stdio", "-c", f'model="{model}"']
 
     @classmethod
-    def for_codex_cli(cls, codex_path: str = "codex", model: str = "gpt-5.5") -> "CodexProvider":
+    def for_codex_cli(
+        cls, codex_path: str = "codex", model: str = "gpt-5.5", *, timeout: float = 30.0
+    ) -> "CodexProvider":
         """Build a CodexProvider that runs the real, locally installed Codex CLI.
 
         Use this for production/manual use, never in the automated test
@@ -41,7 +44,11 @@ class CodexProvider:
         real call through the user's authenticated Codex/ChatGPT account.
         """
         transport = ProcessTransport(cls._codex_cli_command(codex_path, model))
-        return cls(transport)
+        try:
+            return cls(transport, timeout=timeout)
+        except Exception:
+            transport.close()
+            raise
 
     def _request_id(self) -> int:
         request_id = self._next_id
@@ -50,7 +57,15 @@ class CodexProvider:
 
     def _initialize(self) -> None:
         self._transport.send(codex_protocol.initialize_request(self._request_id()))
-        self._transport.read_line()  # discard the initialize response
+        try:
+            line = self._transport.read_line(timeout=self._timeout)
+        except TransportTimeout:
+            raise CodexProviderError(
+                f"Codex app-server did not respond to initialize within {self._timeout}s (timed out)."
+            ) from None
+        if line is None:
+            raise CodexProviderError("Codex app-server closed the connection before completing initialize.")
+        # line is the initialize response; its contents are not needed.
         self._transport.send(codex_protocol.initialized_notification())
 
     def run_task(
@@ -73,7 +88,12 @@ class CodexProvider:
 
     def _wait_for_thread_id(self, timeout: float) -> str:
         while True:
-            line = self._transport.read_line(timeout=timeout)
+            try:
+                line = self._transport.read_line(timeout=timeout)
+            except TransportTimeout:
+                raise CodexProviderError(
+                    f"Codex app-server did not start a thread within {timeout}s (timed out)."
+                ) from None
             if line is None:
                 raise CodexProviderError("Codex app-server closed the connection before starting a thread.")
             event = codex_protocol.parse_event(line)
@@ -85,7 +105,12 @@ class CodexProvider:
     def _wait_for_agent_message(self, timeout: float) -> str:
         agent_text: str | None = None
         while True:
-            line = self._transport.read_line(timeout=timeout)
+            try:
+                line = self._transport.read_line(timeout=timeout)
+            except TransportTimeout:
+                raise CodexProviderError(
+                    f"Codex app-server did not complete the turn within {timeout}s (timed out)."
+                ) from None
             if line is None:
                 raise CodexProviderError("Codex app-server closed the connection before the turn completed.")
             event = codex_protocol.parse_event(line)
