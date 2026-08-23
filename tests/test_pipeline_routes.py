@@ -117,3 +117,19 @@ def test_changing_stage_via_a_different_projects_url_returns_404_and_leaves_it_u
     row = conn.execute("SELECT stage FROM opportunities WHERE id = ?", (opp_id,)).fetchone()
     conn.close()
     assert row["stage"] == "Research"
+
+
+def test_changing_stage_via_hx_request_returns_the_updated_row_partial(tmp_db_path):
+    client, project_id, opp_id = _client(tmp_db_path)
+
+    response = client.post(
+        f"/projects/{project_id}/pipeline/{opp_id}/stage",
+        data={"stage": "Contacted"},
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert "<html" not in response.text
+    assert f'id="pipeline-row-{opp_id}"' in response.text
+    assert 'selected' in response.text
+    assert "Contacted" in response.text

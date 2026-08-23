@@ -91,3 +91,16 @@ def list_pipeline(conn: sqlite3.Connection, project_id: int) -> list[sqlite3.Row
     # then group by pipeline stage order (not alphabetical).
     by_recency = sorted(rows, key=lambda r: r["updated_at"], reverse=True)
     return sorted(by_recency, key=lambda r: stage_order.get(r["stage"], len(STAGES)))
+
+
+def get_pipeline_row(conn: sqlite3.Connection, opportunity_id: int) -> sqlite3.Row | None:
+    return conn.execute(
+        """
+        SELECT o.*, org.name AS organization_name, c.name AS contact_name
+        FROM opportunities o
+        LEFT JOIN organizations org ON org.id = o.organization_id
+        LEFT JOIN contacts c ON c.id = o.contact_id
+        WHERE o.id = ?
+        """,
+        (opportunity_id,),
+    ).fetchone()

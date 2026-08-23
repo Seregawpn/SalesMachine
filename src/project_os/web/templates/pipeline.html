@@ -17,25 +17,7 @@
   </thead>
   <tbody>
     {% for opp in opportunities %}
-    <tr>
-      <td>{{ opp["organization_name"] or "Unknown" }}</td>
-      <td>{{ opp["contact_name"] or "Unknown" }}</td>
-      <td>
-        <form method="post" action="/projects/{{ project_id }}/pipeline/{{ opp['id'] }}/stage">
-          <label for="stage-{{ opp['id'] }}" class="sr-only">Stage for {{ opp["organization_name"] or "Unknown" }}</label>
-          <select id="stage-{{ opp['id'] }}" name="stage">
-            {% for stage in stages %}
-            <option value="{{ stage }}" {% if stage == opp["stage"] %}selected{% endif %}>{{ stage }}</option>
-            {% endfor %}
-          </select>
-          <button type="submit">Update stage</button>
-        </form>
-      </td>
-      <td>{{ opp["value"] or "Unknown" }}</td>
-      <td>{{ opp["blocker"] or "None" }}</td>
-      <td>{{ opp["next_action"] or "Unknown" }}</td>
-      <td>{{ opp["next_action_due"] or "Unknown" }}</td>
-    </tr>
+    {% include "_pipeline_row.html" %}
     {% else %}
     <tr><td colspan="7">No opportunities yet.</td></tr>
     {% endfor %}

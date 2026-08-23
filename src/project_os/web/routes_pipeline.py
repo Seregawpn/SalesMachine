@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import RedirectResponse
 
 from project_os.db import get_connection
-from project_os.repositories.opportunities import list_pipeline, update_stage
+from project_os.repositories.opportunities import list_pipeline, update_stage, get_pipeline_row
 from project_os.pipeline import STAGES
 
 router = APIRouter()
@@ -27,6 +27,12 @@ def change_stage(request: Request, project_id: int, opportunity_id: int, stage: 
     conn = get_connection(request.app.state.db_path)
     try:
         update_stage(conn, opportunity_id, stage, project_id=project_id, actor="user")
+        if request.headers.get("hx-request") == "true":
+            opp = get_pipeline_row(conn, opportunity_id)
+            return request.app.state.templates.TemplateResponse(
+                request, "_pipeline_row.html",
+                {"opp": opp, "project_id": project_id, "stages": STAGES},
+            )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except LookupError as e:
