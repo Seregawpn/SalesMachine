@@ -2,7 +2,7 @@ import json
 import sqlite3
 from typing import Any, Protocol
 
-from project_os.repositories.actions import create_action, has_open_action_for
+from project_os.repositories.actions import create_action
 from project_os.repositories.contacts import create_contact, get_contact_by_email, get_project_contact, link_contact_to_project
 from project_os.repositories.interactions import create_interaction, get_interaction_by_external_id
 
@@ -40,9 +40,11 @@ sales-relevant. Each object in the array must have exactly these fields:
 - "due_date": an ISO date (YYYY-MM-DD) for when this should be followed \
   up on, or null if there is no clear due date
 
-Never invent information that is not in the message. If you are not \
-confident about a field, use "Unknown" for text fields or null for \
-draft_reply/due_date rather than guessing.
+Never invent information that is not in the message. Every message has a \
+real sender, so "sender_email" must always be that sender's actual email \
+address — never "Unknown" or a placeholder. If you are not confident about \
+any other text field, use "Unknown" for it, or null for draft_reply/due_date, \
+rather than guessing.
 """
 
 
@@ -56,12 +58,39 @@ class MailSyncError(RuntimeError):
     pass
 
 
+_VALID_INTENTS = (
+    "positive", "neutral", "question", "objection",
+    "negative", "scheduling", "administrative", "not_sales_related",
+)
+
+
 def _validate_reply(reply: Any, index: int) -> dict:
     if not isinstance(reply, dict):
         raise MailSyncError(f"Item {index} in Codex's response is not a JSON object: {reply!r}")
+
     missing = [field for field in REQUIRED_MAIL_REPLY_FIELDS if field not in reply]
     if missing:
         raise MailSyncError(f"Item {index} in Codex's response is missing required field(s): {', '.join(missing)}")
+
+    for field in ("message_id", "sender_email", "sender_name", "subject", "summary", "intent", "recommended_action"):
+        if not isinstance(reply[field], str):
+            raise MailSyncError(f"Item {index}'s {field!r} must be a string, got {reply[field]!r}")
+
+    for field in ("draft_reply", "due_date"):
+        if reply[field] is not None and not isinstance(reply[field], str):
+            raise MailSyncError(f"Item {index}'s {field!r} must be a string or null, got {reply[field]!r}")
+
+    if not reply["message_id"].strip():
+        raise MailSyncError(f"Item {index} has an empty message_id")
+
+    if "@" not in reply["sender_email"]:
+        raise MailSyncError(f"Item {index}'s sender_email {reply['sender_email']!r} does not look like an email address")
+
+    if reply["intent"] not in _VALID_INTENTS:
+        raise MailSyncError(
+            f"Item {index}'s intent {reply['intent']!r} is not one of the recognized values: {', '.join(_VALID_INTENTS)}"
+        )
+
     return reply
 
 
@@ -103,31 +132,35 @@ def sync_mail_replies(
         if get_interaction_by_external_id(conn, project_id, reply["message_id"]) is not None:
             continue
 
-        contact = get_contact_by_email(conn, reply["sender_email"])
-        if contact is None:
-            contact_id = create_contact(conn, reply["sender_name"], email=reply["sender_email"])
-        else:
-            contact_id = contact["id"]
+        conn.execute("BEGIN")
+        try:
+            contact = get_contact_by_email(conn, reply["sender_email"])
+            if contact is None:
+                contact_id = create_contact(conn, reply["sender_name"], email=reply["sender_email"])
+            else:
+                contact_id = contact["id"]
 
-        if get_project_contact(conn, project_id, contact_id) is None:
-            link_contact_to_project(conn, project_id, contact_id)
+            if get_project_contact(conn, project_id, contact_id) is None:
+                link_contact_to_project(conn, project_id, contact_id)
 
-        create_interaction(
-            conn, project_id, contact_id,
-            channel="email", direction="inbound", subject=reply["subject"],
-            ai_summary=reply["summary"], intent=reply["intent"],
-            external_message_id=reply["message_id"],
-        )
+            create_interaction(
+                conn, project_id, contact_id,
+                channel="email", direction="inbound", subject=reply["subject"],
+                ai_summary=reply["summary"], intent=reply["intent"],
+                external_message_id=reply["message_id"],
+            )
 
-        reason = reply["recommended_action"]
-        if not has_open_action_for(conn, "contacts", contact_id, reason):
             create_action(
-                conn, project_id, module="Sales", reason=reason,
+                conn, project_id, module="Sales", reason=reply["recommended_action"],
                 priority=_priority_for_intent(reply["intent"]),
                 due_date=reply["due_date"],
                 linked_table="contacts", linked_id=contact_id,
                 suggested_message=reply["draft_reply"],
             )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
         created += 1
 
     return created

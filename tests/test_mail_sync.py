@@ -108,6 +108,36 @@ def test_required_mail_reply_fields_match_what_is_validated():
     )
 
 
+def test_check_for_new_mail_raises_on_non_string_message_id():
+    reply = _valid_reply(message_id={"nested": 1})
+    provider = FakeProvider(json.dumps([reply]))
+    try:
+        check_for_new_mail(provider)
+        assert False, "expected MailSyncError"
+    except MailSyncError as error:
+        assert "message_id" in str(error)
+
+
+def test_check_for_new_mail_raises_on_sender_email_without_at_sign():
+    reply = _valid_reply(sender_email="Unknown")
+    provider = FakeProvider(json.dumps([reply]))
+    try:
+        check_for_new_mail(provider)
+        assert False, "expected MailSyncError"
+    except MailSyncError as error:
+        assert "sender_email" in str(error)
+
+
+def test_check_for_new_mail_raises_on_unrecognized_intent():
+    reply = _valid_reply(intent="Positive")
+    provider = FakeProvider(json.dumps([reply]))
+    try:
+        check_for_new_mail(provider)
+        assert False, "expected MailSyncError"
+    except MailSyncError as error:
+        assert "intent" in str(error)
+
+
 from pathlib import Path
 
 from project_os.db import get_connection, run_migrations
@@ -200,3 +230,25 @@ def test_sync_mail_replies_maps_intent_to_priority():
     assert _priority_for_intent("negative") == "P3"
     assert _priority_for_intent("objection") == "P3"
     assert _priority_for_intent("administrative") == "P3"
+
+
+def test_sync_mail_replies_leaves_no_partial_state_if_action_creation_fails(tmp_db_path, monkeypatch):
+    import project_os.ai.mail_sync as mail_sync_module
+
+    conn, project_id = _project(tmp_db_path)
+    provider = FakeProvider(json.dumps([_valid_reply()]))
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("simulated failure")
+
+    monkeypatch.setattr(mail_sync_module, "create_action", _boom)
+
+    try:
+        sync_mail_replies(conn, provider, project_id)
+        assert False, "expected the simulated failure to propagate"
+    except RuntimeError:
+        pass
+
+    # Nothing should have been committed: no interaction, no contact.
+    assert get_interaction_by_external_id(conn, project_id, "15082") is None
+    assert get_contact_by_email(conn, "jane@example.org") is None
