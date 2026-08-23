@@ -13,14 +13,19 @@ def create_action(
     linked_table: str | None = None,
     linked_id: int | None = None,
     suggested_message: str | None = None,
+    source_interaction_id: int | None = None,
 ) -> int:
     cur = conn.execute(
         """
         INSERT INTO actions
-            (project_id, module, linked_table, linked_id, reason, priority, due_date, suggested_message)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (project_id, module, linked_table, linked_id, reason, priority, due_date,
+             suggested_message, source_interaction_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (project_id, module, linked_table, linked_id, reason, priority, due_date, suggested_message),
+        (
+            project_id, module, linked_table, linked_id, reason, priority, due_date,
+            suggested_message, source_interaction_id,
+        ),
     )
     return cur.lastrowid
 
@@ -66,3 +71,26 @@ def has_open_action_for(conn: sqlite3.Connection, linked_table: str, linked_id: 
         (linked_table, linked_id, reason),
     ).fetchone()
     return row is not None
+
+
+def get_reply_context(conn: sqlite3.Connection, action_id: int) -> dict | None:
+    row = conn.execute(
+        """
+        SELECT c.email AS to_email, i.subject AS interaction_subject, a.suggested_message AS body
+        FROM actions a
+        JOIN contacts c ON a.linked_table = 'contacts' AND c.id = a.linked_id
+        JOIN interactions i ON i.id = a.source_interaction_id
+        WHERE a.id = ?
+          AND a.status = 'Open'
+          AND a.suggested_message IS NOT NULL AND a.suggested_message != ''
+          AND c.email IS NOT NULL AND c.email != ''
+        """,
+        (action_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return {
+        "to": row["to_email"],
+        "subject": f"Re: {row['interaction_subject']}",
+        "body": row["body"],
+    }
