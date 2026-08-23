@@ -36,7 +36,7 @@ def test_list_unread_messages_formats_results_from_jxa_output():
     runner = _fake_runner({
         "messages": [
             {"id": "msg-1", "subject": "Re: pricing", "sender": "Jane <jane@example.org>",
-             "date_received": "2026-08-20", "mailbox": "INBOX", "read": False},
+             "date_received": "2026-08-20", "mailbox": "INBOX", "account": "Nexyai", "read": False},
         ],
         "scanned": 5,
     })
@@ -48,6 +48,52 @@ def test_list_unread_messages_formats_results_from_jxa_output():
     assert "Re: pricing" in text
     assert "jane@example.org" in text
     assert "msg-1" in text
+    assert "Account: Nexyai" in text
+
+
+def test_list_unread_messages_passes_a_single_account_filter_through():
+    captured = {}
+
+    def runner(*args, **kwargs):
+        captured["payload"] = json.loads(args[0][-1])
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout=json.dumps({"messages": [], "scanned": 0}), stderr="")
+
+    handle_request(
+        {"id": 12, "method": "tools/call", "params": {"name": "list_unread_messages", "arguments": {"account": "Nexyai"}}},
+        runner=runner,
+    )
+    assert captured["payload"]["account"] == "Nexyai"
+
+
+def test_list_recent_messages_passes_a_list_of_accounts_through():
+    captured = {}
+
+    def runner(*args, **kwargs):
+        captured["payload"] = json.loads(args[0][-1])
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout=json.dumps({"messages": [], "scanned": 0}), stderr="")
+
+    handle_request(
+        {
+            "id": 13, "method": "tools/call",
+            "params": {"name": "list_recent_messages", "arguments": {"account": ["Google", "Nexyai"]}},
+        },
+        runner=runner,
+    )
+    assert captured["payload"]["account"] == ["Google", "Nexyai"]
+
+
+def test_search_messages_omits_account_filter_when_not_given():
+    captured = {}
+
+    def runner(*args, **kwargs):
+        captured["payload"] = json.loads(args[0][-1])
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout=json.dumps({"messages": [], "scanned": 0}), stderr="")
+
+    handle_request(
+        {"id": 14, "method": "tools/call", "params": {"name": "search_messages", "arguments": {"query": "pricing"}}},
+        runner=runner,
+    )
+    assert captured["payload"]["account"] is None
 
 
 def test_read_message_includes_body_when_jxa_returns_one():

@@ -39,6 +39,10 @@ function run(argv) {
     }
   }
 
+  function messageAccount(message) {
+    return value(() => message.mailbox().account().name(), "");
+  }
+
   function messageRecord(message, includeBody) {
     const record = {
       id: value(() => message.id(), ""),
@@ -46,12 +50,27 @@ function run(argv) {
       sender: value(() => message.sender(), ""),
       date_received: value(() => message.dateReceived(), ""),
       mailbox: value(() => message.mailbox().name(), ""),
+      account: messageAccount(message),
       read: boolValue(() => message.readStatus(), false)
     };
     if (includeBody) {
       record.body = value(() => message.content(), "");
     }
     return record;
+  }
+
+  function accountFilterList(raw) {
+    if (!raw) return null;
+    const items = Array.isArray(raw) ? raw : [raw];
+    const names = items
+      .filter(v => typeof v === "string" && v.trim().length > 0)
+      .map(v => v.trim().toLowerCase());
+    return names.length > 0 ? names : null;
+  }
+
+  function matchesAccountFilter(message, accountFilter) {
+    if (!accountFilter) return true;
+    return accountFilter.indexOf(messageAccount(message).toLowerCase()) !== -1;
   }
 
   function limitNumber(value, fallback) {
@@ -69,6 +88,7 @@ function run(argv) {
   const mode = request.mode || "recent";
   const limit = limitNumber(request.limit, 10);
   const maxScan = maxScanNumber(request.max_scan, 100);
+  const accountFilter = accountFilterList(request.account);
   const inboxMessages = Mail.inbox.messages();
   let selected = [];
   let scanned = 0;
@@ -97,7 +117,7 @@ function run(argv) {
     // replies, not exhaustive history.
     for (const message of inboxMessages) {
       scanned += 1;
-      if (boolValue(() => message.readStatus(), false) === false) {
+      if (boolValue(() => message.readStatus(), false) === false && matchesAccountFilter(message, accountFilter)) {
         selected.push(messageRecord(message, false));
         if (selected.length >= limit) break;
       }
@@ -122,12 +142,18 @@ function run(argv) {
       scanned = inboxMatches.length;
     }
     for (let i = 0; i < combined.length && selected.length < limit; i++) {
-      selected.push(messageRecord(combined[i], false));
+      if (matchesAccountFilter(combined[i], accountFilter)) {
+        selected.push(messageRecord(combined[i], false));
+      }
     }
   } else {
     for (const message of inboxMessages) {
-      selected.push(messageRecord(message, false));
-      if (selected.length >= limit) break;
+      scanned += 1;
+      if (matchesAccountFilter(message, accountFilter)) {
+        selected.push(messageRecord(message, false));
+        if (selected.length >= limit) break;
+      }
+      if (scanned >= maxScan) break;
     }
   }
 
@@ -188,6 +214,16 @@ def _bounded_scan(limit: int) -> int:
     return min(max(limit * 25, 100), 250)
 
 
+def _account_filter(arguments: dict[str, Any]) -> str | list[str] | None:
+    value = arguments.get("account")
+    if isinstance(value, str) and value.strip():
+        return value
+    if isinstance(value, list):
+        names = [v for v in value if isinstance(v, str) and v.strip()]
+        return names or None
+    return None
+
+
 def _format_messages(messages: list[dict[str, Any]]) -> str:
     if not messages:
         return "No matching Apple Mail messages were found."
@@ -198,6 +234,7 @@ def _format_messages(messages: list[dict[str, Any]]) -> str:
             f"From: {message.get('sender') or 'unknown'}",
             f"Date: {message.get('date_received') or 'unknown'}",
             f"Mailbox: {message.get('mailbox') or 'unknown'}",
+            f"Account: {message.get('account') or 'unknown'}",
             f"Message ID: {message.get('id') or 'unknown'}",
         ]
         body = message.get("body")
@@ -229,16 +266,35 @@ def _tools() -> list[dict[str, Any]]:
         "type": "integer", "minimum": 1, "maximum": 25,
         "description": "Maximum number of messages to return.",
     }
+    account_schema = {
+        "oneOf": [
+            {"type": "string"},
+            {"type": "array", "items": {"type": "string"}},
+        ],
+        "description": (
+            "Restrict results to one or more Mail.app account names "
+            "(e.g. \"Google\", \"Nexyai\", or an account's email address, "
+            "exactly as Mail.app names it). Omit to include all accounts."
+        ),
+    }
     return [
         {
             "name": "list_unread_messages",
             "description": "List unread messages from the Apple Mail inbox.",
-            "inputSchema": {"type": "object", "properties": {"limit": limit_schema}, "additionalProperties": False},
+            "inputSchema": {
+                "type": "object",
+                "properties": {"limit": limit_schema, "account": account_schema},
+                "additionalProperties": False,
+            },
         },
         {
             "name": "list_recent_messages",
             "description": "List recent messages from the Apple Mail inbox.",
-            "inputSchema": {"type": "object", "properties": {"limit": limit_schema}, "additionalProperties": False},
+            "inputSchema": {
+                "type": "object",
+                "properties": {"limit": limit_schema, "account": account_schema},
+                "additionalProperties": False,
+            },
         },
         {
             "name": "search_messages",
@@ -248,6 +304,7 @@ def _tools() -> list[dict[str, Any]]:
                 "properties": {
                     "query": {"type": "string", "description": "Text to search for in sender or subject."},
                     "limit": limit_schema,
+                    "account": account_schema,
                 },
                 "required": ["query"],
                 "additionalProperties": False,
@@ -295,15 +352,28 @@ def handle_request(
         if name == "list_unread_messages":
             limit = _clamp_limit(arguments)
             result = _mail_tool_result(
-                {"mode": "unread", "limit": limit, "max_scan": _bounded_scan(limit)},
+                {
+                    "mode": "unread", "limit": limit, "max_scan": _bounded_scan(limit),
+                    "account": _account_filter(arguments),
+                },
                 runner=runner,
             )
         elif name == "list_recent_messages":
-            result = _mail_tool_result({"mode": "recent", "limit": _clamp_limit(arguments)}, runner=runner)
+            limit = _clamp_limit(arguments)
+            result = _mail_tool_result(
+                {
+                    "mode": "recent", "limit": limit, "max_scan": _bounded_scan(limit),
+                    "account": _account_filter(arguments),
+                },
+                runner=runner,
+            )
         elif name == "search_messages":
             limit = _clamp_limit(arguments)
             result = _mail_tool_result(
-                {"mode": "search", "query": str(arguments.get("query", "")), "limit": limit, "max_scan": _bounded_scan(limit)},
+                {
+                    "mode": "search", "query": str(arguments.get("query", "")), "limit": limit,
+                    "max_scan": _bounded_scan(limit), "account": _account_filter(arguments),
+                },
                 runner=runner,
             )
         elif name == "read_message":
