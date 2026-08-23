@@ -176,7 +176,11 @@ def test_for_codex_cli_closes_transport_and_does_not_leak_process_on_init_failur
     monkeypatch.setattr(
         CodexProvider,
         "_codex_cli_command",
-        staticmethod(lambda codex_path, model, mcp_servers=None: [sys.executable, str(FIXTURE_SCRIPT)]),
+        staticmethod(
+            lambda codex_path, model, mcp_servers=None, *, allow_send=False: [
+                sys.executable, str(FIXTURE_SCRIPT)
+            ]
+        ),
     )
 
     # fake_app_server.py never replies to "initialize", so this times out
@@ -196,12 +200,12 @@ def test_codex_cli_command_with_no_mcp_servers_is_unchanged():
 def test_codex_cli_command_adds_mcp_server_flags():
     command = CodexProvider._codex_cli_command(
         "codex", "gpt-5.5",
-        mcp_servers={"project-os-mail": ("python3", ["-m", "project_os.ai.mail_read_mcp_server"])},
+        mcp_servers={"project-os-mail": ("fake-python", ["-m", "project_os.ai.mail_read_mcp_server"])},
     )
     assert command[:4] == ["codex", "app-server", "--stdio"][:3] + ["-c"]
     assert '-c' in command
     assert 'mcp_servers.project-os-mail.enabled=true' in command
-    assert 'mcp_servers.project-os-mail.command="python3"' in command
+    assert 'mcp_servers.project-os-mail.command="fake-python"' in command
     assert 'mcp_servers.project-os-mail.args=["-m", "project_os.ai.mail_read_mcp_server"]' in command
 
 
@@ -209,9 +213,26 @@ def test_codex_cli_command_supports_multiple_mcp_servers():
     command = CodexProvider._codex_cli_command(
         "codex", "gpt-5.5",
         mcp_servers={
-            "project-os-mail": ("python3", ["-m", "project_os.ai.mail_read_mcp_server"]),
-            "project-os-mail-send": ("python3", ["-m", "project_os.ai.mail_send_mcp_server"]),
+            "project-os-mail": ("fake-python", ["-m", "project_os.ai.mail_read_mcp_server"]),
+            "project-os-crm": ("fake-python", ["-m", "project_os.ai.crm_mcp_server"]),
         },
     )
     assert 'mcp_servers.project-os-mail.enabled=true' in command
+    assert 'mcp_servers.project-os-crm.enabled=true' in command
+
+
+def test_codex_cli_command_rejects_a_send_server_without_allow_send():
+    with pytest.raises(ValueError, match="allow_send"):
+        CodexProvider._codex_cli_command(
+            "codex", "gpt-5.5",
+            mcp_servers={"project-os-mail-send": ("fake-python", ["-m", "project_os.ai.mail_send_mcp_server"])},
+        )
+
+
+def test_codex_cli_command_allows_a_send_server_with_allow_send_true():
+    command = CodexProvider._codex_cli_command(
+        "codex", "gpt-5.5",
+        mcp_servers={"project-os-mail-send": ("fake-python", ["-m", "project_os.ai.mail_send_mcp_server"])},
+        allow_send=True,
+    )
     assert 'mcp_servers.project-os-mail-send.enabled=true' in command

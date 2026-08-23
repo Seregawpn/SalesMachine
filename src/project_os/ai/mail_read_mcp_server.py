@@ -125,6 +125,13 @@ function run(argv) {
 """
 
 
+def mcp_server_command() -> tuple[str, list[str]]:
+    """The (command, args) pair to launch this MCP server as a subprocess,
+    using the interpreter currently running (so the venv this daemon is
+    installed into is the same one that can import project_os)."""
+    return (sys.executable, ["-m", "project_os.ai.mail_read_mcp_server"])
+
+
 class MailMcpError(RuntimeError):
     """Raised when Apple Mail data cannot be read."""
 
@@ -278,7 +285,10 @@ def handle_request(
                 runner=runner,
             )
         elif name == "read_message":
-            result = _mail_tool_result({"mode": "read", "id": str(arguments.get("id", ""))}, runner=runner)
+            result = _mail_tool_result(
+                {"mode": "read", "id": str(arguments.get("id", "")), "max_scan": 250},
+                runner=runner,
+            )
         else:
             result = {"isError": True, "content": [{"type": "text", "text": f"Unknown tool: {name}"}]}
         return {"jsonrpc": "2.0", "id": request_id, "result": result}

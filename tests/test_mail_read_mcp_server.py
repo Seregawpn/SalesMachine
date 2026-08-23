@@ -1,7 +1,8 @@
 import json
 import subprocess
+import sys
 
-from project_os.ai.mail_read_mcp_server import handle_request, MailMcpError, _run_mail_jxa
+from project_os.ai.mail_read_mcp_server import handle_request, mcp_server_command, MailMcpError, _run_mail_jxa
 
 
 def _fake_runner(stdout_payload: dict, returncode: int = 0):
@@ -97,3 +98,23 @@ def test_run_mail_jxa_raises_mail_mcp_error_on_nonzero_exit():
 def test_unknown_method_returns_json_rpc_error():
     response = handle_request({"id": 7, "method": "resources/list"})
     assert response["error"]["code"] == -32601
+
+
+def test_read_message_requests_a_generous_max_scan():
+    captured = {}
+
+    def runner(*args, **kwargs):
+        captured["payload"] = json.loads(args[0][-1])
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout=json.dumps({"messages": [], "scanned": 0}), stderr="")
+
+    handle_request(
+        {"id": 10, "method": "tools/call", "params": {"name": "read_message", "arguments": {"id": "msg-1"}}},
+        runner=runner,
+    )
+    assert captured["payload"]["max_scan"] == 250
+
+
+def test_mcp_server_command_uses_the_current_interpreter():
+    command, args = mcp_server_command()
+    assert command == sys.executable
+    assert args == ["-m", "project_os.ai.mail_read_mcp_server"]

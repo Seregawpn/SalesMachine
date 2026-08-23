@@ -1,7 +1,8 @@
 import json
 import subprocess
+import sys
 
-from project_os.ai.mail_send_mcp_server import handle_request, MailSendError, _send_via_jxa
+from project_os.ai.mail_send_mcp_server import handle_request, mcp_server_command, MailSendError, _send_via_jxa
 
 
 def _fake_runner(returncode: int = 0, stderr: str = ""):
@@ -76,3 +77,9 @@ def test_send_via_jxa_raises_mail_send_error_on_failure():
         assert False, "expected MailSendError"
     except MailSendError as error:
         assert "boom" in str(error)
+
+
+def test_mcp_server_command_uses_the_current_interpreter():
+    command, args = mcp_server_command()
+    assert command == sys.executable
+    assert args == ["-m", "project_os.ai.mail_send_mcp_server"]

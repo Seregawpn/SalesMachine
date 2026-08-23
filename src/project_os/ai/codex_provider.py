@@ -35,7 +35,19 @@ class CodexProvider:
         codex_path: str,
         model: str,
         mcp_servers: dict[str, tuple[str, list[str]]] | None = None,
+        *,
+        allow_send: bool = False,
     ) -> list[str]:
+        for name in (mcp_servers or {}):
+            if "send" in name.lower() and not allow_send:
+                raise ValueError(
+                    f"MCP server {name!r} looks like a send-capable server, but "
+                    f"allow_send=True was not passed. This is a deliberate guard: "
+                    f"a Codex thread should only ever get send capability for the "
+                    f"one narrow 'send this approved draft' task, never as a side "
+                    f"effect of configuring other servers. Pass allow_send=True "
+                    f"explicitly if this thread genuinely needs to send."
+                )
         command = [codex_path, "app-server", "--stdio", "-c", f'model="{model}"']
         for name, (server_command, server_args) in (mcp_servers or {}).items():
             command.extend([
@@ -52,21 +64,32 @@ class CodexProvider:
         model: str = "gpt-5.5",
         mcp_servers: dict[str, tuple[str, list[str]]] | None = None,
         *,
+        allow_send: bool = False,
         timeout: float = 30.0,
     ) -> "CodexProvider":
         """Build a CodexProvider that runs the real, locally installed Codex CLI.
 
         `mcp_servers` maps a server name to `(command, args)` — e.g.
-        `{"project-os-mail": ("python3", ["-m", "project_os.ai.mail_read_mcp_server"])}` —
+        `{"project-os-mail": mail_read_mcp_server.mcp_server_command()}` —
         giving that Codex thread tool-level access to whatever the named
         server exposes. Omit it (the default) for a plain text-only task
         with no tools at all.
+
+        Any server name containing "send" (case-insensitive) — e.g.
+        `{"project-os-mail-send": mail_send_mcp_server.mcp_server_command()}` —
+        requires `allow_send=True`, or this raises `ValueError`. This is a
+        deliberate guard: a Codex thread should only ever get send
+        capability for the one narrow "send this approved draft" task,
+        never as an incidental side effect of whatever `mcp_servers` dict a
+        caller happens to build.
 
         Use this for production/manual use, never in the automated test
         suite — it spawns a real subprocess and, on first task, makes a
         real call through the user's authenticated Codex/ChatGPT account.
         """
-        transport = ProcessTransport(cls._codex_cli_command(codex_path, model, mcp_servers))
+        transport = ProcessTransport(
+            cls._codex_cli_command(codex_path, model, mcp_servers, allow_send=allow_send)
+        )
         try:
             return cls(transport, timeout=timeout)
         except Exception:

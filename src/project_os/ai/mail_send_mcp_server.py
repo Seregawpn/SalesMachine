@@ -35,6 +35,13 @@ function run(argv) {
 _REQUIRED_FIELDS = ("to", "subject", "body")
 
 
+def mcp_server_command() -> tuple[str, list[str]]:
+    """The (command, args) pair to launch this MCP server as a subprocess,
+    using the interpreter currently running (so the venv this daemon is
+    installed into is the same one that can import project_os)."""
+    return (sys.executable, ["-m", "project_os.ai.mail_send_mcp_server"])
+
+
 class MailSendError(RuntimeError):
     """Raised when Apple Mail cannot send the message."""
 
