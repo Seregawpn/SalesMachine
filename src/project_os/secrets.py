@@ -2,7 +2,7 @@ import subprocess
 
 
 def set_api_key(service: str, account: str, api_key: str) -> None:
-    subprocess.run(
+    result = subprocess.run(
         [
             "security", "add-generic-password",
             "-U",  # update if it already exists
@@ -10,9 +10,13 @@ def set_api_key(service: str, account: str, api_key: str) -> None:
             "-a", account,
             "-w", api_key,
         ],
-        check=True,
         capture_output=True,
+        text=True,
     )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Failed to store Keychain entry for service={service!r}: security exited {result.returncode}"
+        )
 
 
 def get_api_key(service: str, account: str) -> str:

@@ -5,7 +5,7 @@ from project_os.db import get_connection, run_migrations
 from project_os.repositories.projects import create_project
 from project_os.repositories.contacts import create_contact, link_contact_to_project
 from project_os.repositories.linkedin import set_linkedin_state
-from project_os.integrations.unipile_sync import match_contact_by_linkedin_url, sync_linkedin_states
+from project_os.integrations.unipile_sync import _normalize_linkedin_url, sync_linkedin_states
 
 MIGRATIONS_DIR = Path(__file__).parent.parent / "src" / "project_os" / "migrations"
 
@@ -24,23 +24,31 @@ def _fake_client(accounts, relations):
     return client
 
 
-def test_match_contact_by_linkedin_url_finds_matching_contact(tmp_db_path):
+def test_normalize_linkedin_url_strips_scheme_www_and_trailing_slash():
+    assert (
+        _normalize_linkedin_url("https://www.LinkedIn.com/in/jane/")
+        == _normalize_linkedin_url("linkedin.com/in/jane")
+    )
+    assert _normalize_linkedin_url("http://LinkedIn.com/in/Jane") == "linkedin.com/in/jane"
+
+
+def test_sync_matches_contact_despite_url_formatting_differences(tmp_db_path):
     conn, project_id = _setup(tmp_db_path)
-    contact_id = create_contact(conn, "Jane Smith", linkedin_url="https://www.linkedin.com/in/janesmith/")
+    contact_id = create_contact(conn, "Jane Smith", linkedin_url="https://www.linkedin.com/in/jane/")
     pc_id = link_contact_to_project(conn, project_id, contact_id)
 
-    result = match_contact_by_linkedin_url(conn, project_id, "https://www.linkedin.com/in/janesmith/")
+    client = _fake_client(
+        accounts=[{"id": "acc_1", "type": "LINKEDIN"}],
+        relations=[{"public_profile_url": "https://linkedin.com/in/jane"}],
+    )
 
-    assert result == pc_id
+    updated_count = sync_linkedin_states(conn, client, project_id)
 
-
-def test_match_contact_by_linkedin_url_returns_none_when_no_match(tmp_db_path):
-    conn, project_id = _setup(tmp_db_path)
-    create_contact(conn, "Jane Smith", linkedin_url="https://www.linkedin.com/in/janesmith/")
-
-    result = match_contact_by_linkedin_url(conn, project_id, "https://www.linkedin.com/in/someone-else/")
-
-    assert result is None
+    row = conn.execute(
+        "SELECT linkedin_state FROM project_contacts WHERE id = ?", (pc_id,)
+    ).fetchone()
+    assert row["linkedin_state"] == "Accepted"
+    assert updated_count == 1
 
 
 def test_sync_updates_state_for_matching_contact(tmp_db_path):

@@ -9,14 +9,22 @@ from project_os.repositories.linkedin import set_linkedin_state
 _PROMOTABLE_TO_ACCEPTED = {"Not started", "Pending Connection"}
 
 
-def match_contact_by_linkedin_url(
-    conn: sqlite3.Connection, project_id: int, linkedin_url: str
-) -> int | None:
-    """Return the project_contacts.id whose contact.linkedin_url matches, or None."""
-    for contact in list_project_contacts(conn, project_id):
-        if contact["contact_linkedin_url"] == linkedin_url:
-            return contact["id"]
-    return None
+def _normalize_linkedin_url(url: str) -> str:
+    """Normalize a LinkedIn URL for comparison.
+
+    Lowercases, strips the scheme, strips a leading "www.", and strips a
+    trailing slash, so that e.g. "https://www.LinkedIn.com/in/jane/" and
+    "linkedin.com/in/jane" compare equal.
+    """
+    normalized = url.strip().lower()
+    for prefix in ("https://", "http://"):
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix):]
+            break
+    if normalized.startswith("www."):
+        normalized = normalized[len("www."):]
+    normalized = normalized.rstrip("/")
+    return normalized
 
 
 def sync_linkedin_states(conn: sqlite3.Connection, client, project_id: int) -> int:
@@ -26,6 +34,9 @@ def sync_linkedin_states(conn: sqlite3.Connection, client, project_id: int) -> i
     UnipileClient.get_relations) to find accepted connections and promotes
     matching contacts to "Accepted" via set_linkedin_state(actor="unipile-sync").
     Returns the count of contacts updated.
+
+    Builds the project's contact list once and looks up each relation by a
+    normalized LinkedIn URL, instead of re-querying the database per relation.
     """
     accounts = client.get_accounts()
     linkedin_account = next(
@@ -36,23 +47,26 @@ def sync_linkedin_states(conn: sqlite3.Connection, client, project_id: int) -> i
 
     relations = client.get_relations(linkedin_account["id"])
 
+    contacts_by_url = {}
+    for contact in list_project_contacts(conn, project_id):
+        contact_url = contact["contact_linkedin_url"]
+        if contact_url:
+            contacts_by_url[_normalize_linkedin_url(contact_url)] = contact
+
     updated_count = 0
     for relation in relations:
         linkedin_url = relation.get("public_profile_url")
         if not linkedin_url:
             continue
 
-        pc_id = match_contact_by_linkedin_url(conn, project_id, linkedin_url)
-        if pc_id is None:
+        contact = contacts_by_url.get(_normalize_linkedin_url(linkedin_url))
+        if contact is None:
             continue
 
-        row = conn.execute(
-            "SELECT linkedin_state FROM project_contacts WHERE id = ?", (pc_id,)
-        ).fetchone()
-        if row["linkedin_state"] not in _PROMOTABLE_TO_ACCEPTED:
+        if contact["linkedin_state"] not in _PROMOTABLE_TO_ACCEPTED:
             continue
 
-        set_linkedin_state(conn, pc_id, "Accepted", actor="unipile-sync")
+        set_linkedin_state(conn, contact["id"], "Accepted", actor="unipile-sync")
         updated_count += 1
 
     return updated_count
