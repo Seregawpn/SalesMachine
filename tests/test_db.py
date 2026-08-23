@@ -9,7 +9,7 @@ MIGRATIONS_DIR = Path(__file__).parent.parent / "src" / "project_os" / "migratio
 def test_run_migrations_creates_core_tables(tmp_db_path):
     conn = get_connection(tmp_db_path)
     version = run_migrations(conn, MIGRATIONS_DIR)
-    assert version == 3
+    assert version == 4
 
     tables = {
         row[0]
@@ -36,10 +36,10 @@ def test_run_migrations_is_idempotent(tmp_db_path):
     conn = get_connection(tmp_db_path)
     first = run_migrations(conn, MIGRATIONS_DIR)
     second = run_migrations(conn, MIGRATIONS_DIR)
-    assert first == second == 3
+    assert first == second == 4
 
     count = conn.execute("SELECT COUNT(*) FROM schema_version").fetchone()[0]
-    assert count == 3
+    assert count == 4
 
 
 def test_get_connection_enables_wal_mode(tmp_db_path):
