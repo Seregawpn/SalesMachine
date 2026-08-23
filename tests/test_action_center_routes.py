@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -153,6 +154,50 @@ def test_sending_a_reply_with_send_failure_leaves_the_action_open(tmp_db_path, m
 
     assert response.status_code == 303
     assert response.headers["location"] == "/action-center?error=Mail%20is%20not%20configured."
+    conn = get_connection(tmp_db_path)
+    assert len(list_open_actions(conn, project_id)) == 1
+    outbound = conn.execute("SELECT * FROM interactions WHERE direction = 'outbound'").fetchall()
+    conn.close()
+    assert outbound == []
+
+
+def test_sending_a_reply_with_non_mail_send_error_still_redirects_with_flash_error(tmp_db_path, monkeypatch):
+    client, project_id, action_id = _client_with_reply_action(tmp_db_path)
+
+    def fake_send_via_jxa(payload, *, runner=None):
+        raise subprocess.TimeoutExpired(cmd="osascript", timeout=20)
+
+    monkeypatch.setattr("project_os.web.routes_action_center.send_via_jxa", fake_send_via_jxa)
+
+    response = client.post(
+        f"/actions/{action_id}/send", data={"message": "Edited reply text."}, follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/action-center?error=")
+    conn = get_connection(tmp_db_path)
+    assert len(list_open_actions(conn, project_id)) == 1
+    outbound = conn.execute("SELECT * FROM interactions WHERE direction = 'outbound'").fetchall()
+    conn.close()
+    assert outbound == []
+
+
+def test_sending_a_blank_reply_is_rejected_without_sending(tmp_db_path, monkeypatch):
+    client, project_id, action_id = _client_with_reply_action(tmp_db_path)
+    calls = []
+
+    def fake_send_via_jxa(payload, *, runner=None):
+        calls.append(payload)
+
+    monkeypatch.setattr("project_os.web.routes_action_center.send_via_jxa", fake_send_via_jxa)
+
+    response = client.post(
+        f"/actions/{action_id}/send", data={"message": "   "}, follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/action-center?error=Reply%20text%20cannot%20be%20empty."
+    assert calls == []
     conn = get_connection(tmp_db_path)
     assert len(list_open_actions(conn, project_id)) == 1
     outbound = conn.execute("SELECT * FROM interactions WHERE direction = 'outbound'").fetchall()

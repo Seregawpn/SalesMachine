@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from project_os.db import get_connection
 from project_os.repositories.actions import list_open_actions, complete_action, snooze_action, get_reply_context
 from project_os.repositories.interactions import create_interaction
-from project_os.ai.mail_send_mcp_server import send_via_jxa, MailSendError
+from project_os.ai.mail_send_mcp_server import send_via_jxa
 
 router = APIRouter()
 
@@ -61,13 +61,18 @@ def send_reply(request: Request, action_id: int, message: str = Form(...)):
         if context is None:
             raise HTTPException(status_code=404, detail=f"No sendable reply for action {action_id}")
 
+        if not message.strip():
+            return RedirectResponse(
+                url="/action-center?error=Reply text cannot be empty.", status_code=303
+            )
+
         action_row = conn.execute(
             "SELECT project_id, linked_id FROM actions WHERE id = ?", (action_id,)
         ).fetchone()
 
         try:
             send_via_jxa({"to": context["to"], "subject": context["subject"], "body": message})
-        except MailSendError as error:
+        except Exception as error:
             return RedirectResponse(
                 url=f"/action-center?error={quote(str(error))}", status_code=303
             )
