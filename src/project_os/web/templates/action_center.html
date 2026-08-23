@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Action Center — Project OS{% endblock %}
 {% block content %}
+{% if error %}
+<p role="alert" class="flash-error">{{ error }}</p>
+{% endif %}
 <h2>Action Center</h2>
 <table>
   <caption class="sr-only">Open actions across all projects</caption>
@@ -31,6 +34,17 @@
           <input type="date" id="snooze-{{ action['id'] }}" name="new_due_date" required>
           <button type="submit">Snooze</button>
         </form>
+        {% set reply = reply_contexts.get(action['id']) %}
+        {% if reply %}
+        <details>
+          <summary>Reply draft ▾</summary>
+          <form method="post" action="/actions/{{ action['id'] }}/send">
+            <label for="message-{{ action['id'] }}" class="sr-only">Reply text for {{ action["reason"] }}</label>
+            <textarea id="message-{{ action['id'] }}" name="message" rows="6" required>{{ reply["body"] }}</textarea>
+            <button type="submit">Approve &amp; Send</button>
+          </form>
+        </details>
+        {% endif %}
       </td>
     </tr>
     {% else %}

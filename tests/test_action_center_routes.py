@@ -169,3 +169,33 @@ def test_sending_a_reply_for_an_action_without_reply_context_returns_404(tmp_db_
     response = client.post(f"/actions/{row['id']}/send", data={"message": "Some text"})
 
     assert response.status_code == 404
+
+
+def test_action_center_shows_reply_draft_for_a_sendable_action(tmp_db_path):
+    client, project_id, action_id = _client_with_reply_action(tmp_db_path)
+
+    response = client.get("/action-center")
+
+    assert response.status_code == 200
+    assert "Reply draft" in response.text
+    assert "Here is our pricing." in response.text
+    assert "Approve &amp; Send" in response.text
+    assert f'action="/actions/{action_id}/send"' in response.text
+
+
+def test_action_center_hides_reply_draft_for_action_without_reply_context(tmp_db_path):
+    client, project_id = _client(tmp_db_path)
+
+    response = client.get("/action-center")
+
+    assert response.status_code == 200
+    assert "Reply draft" not in response.text
+
+
+def test_action_center_shows_error_banner_from_query_param(tmp_db_path):
+    client, project_id = _client(tmp_db_path)
+
+    response = client.get("/action-center?error=Mail%20is%20not%20configured.")
+
+    assert response.status_code == 200
+    assert "Mail is not configured." in response.text

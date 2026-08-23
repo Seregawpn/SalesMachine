@@ -16,10 +16,16 @@ def action_center(request: Request):
     conn = get_connection(request.app.state.db_path)
     try:
         actions = list_open_actions(conn)
+        reply_contexts = {action["id"]: get_reply_context(conn, action["id"]) for action in actions}
     finally:
         conn.close()
     return request.app.state.templates.TemplateResponse(
-        request, "action_center.html", {"actions": actions}
+        request, "action_center.html",
+        {
+            "actions": actions,
+            "reply_contexts": reply_contexts,
+            "error": request.query_params.get("error"),
+        },
     )
 
 
