@@ -67,3 +67,7 @@ def list_project_contacts(conn: sqlite3.Connection, project_id: int) -> list[sql
         """,
         (project_id,),
     ).fetchall()
+
+
+def list_contacts(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute("SELECT * FROM contacts ORDER BY name").fetchall()

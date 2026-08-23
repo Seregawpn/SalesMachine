@@ -31,6 +31,9 @@ def create_app(db_path: str) -> FastAPI:
     from project_os.web.routes_linkedin import router as linkedin_router
     app.include_router(linkedin_router)
 
+    from project_os.web.routes_contacts import router as contacts_router
+    app.include_router(contacts_router)
+
     return app
 
 
