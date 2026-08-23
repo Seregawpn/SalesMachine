@@ -1,6 +1,7 @@
 from typing import Any, Protocol
 
 from project_os.ai import codex_protocol
+from project_os.ai.process_transport import ProcessTransport
 
 DEFAULT_DEVELOPER_INSTRUCTIONS = (
     "You are a backend text-processing worker for a sales CRM. "
@@ -26,6 +27,21 @@ class CodexProvider:
         self._transport = transport
         self._next_id = 1
         self._initialize()
+
+    @staticmethod
+    def _codex_cli_command(codex_path: str, model: str) -> list[str]:
+        return [codex_path, "app-server", "--stdio", "-c", f'model="{model}"']
+
+    @classmethod
+    def for_codex_cli(cls, codex_path: str = "codex", model: str = "gpt-5.5") -> "CodexProvider":
+        """Build a CodexProvider that runs the real, locally installed Codex CLI.
+
+        Use this for production/manual use, never in the automated test
+        suite — it spawns a real subprocess and, on first task, makes a
+        real call through the user's authenticated Codex/ChatGPT account.
+        """
+        transport = ProcessTransport(cls._codex_cli_command(codex_path, model))
+        return cls(transport)
 
     def _request_id(self) -> int:
         request_id = self._next_id

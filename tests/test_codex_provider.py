@@ -113,3 +113,16 @@ def test_close_closes_the_transport():
     provider.close()
 
     assert transport.closed is True
+
+
+def test_for_codex_cli_builds_a_provider_with_a_process_transport():
+    from project_os.ai.process_transport import ProcessTransport
+
+    # We don't want this test to actually spawn `codex` (see Global
+    # Constraints: no live external dependency in the automated suite),
+    # so this only checks that for_codex_cli builds the right command —
+    # it does not construct a real CodexProvider from it.
+    from project_os.ai.codex_provider import CodexProvider
+
+    command = CodexProvider._codex_cli_command("codex", "gpt-5.5")
+    assert command == ["codex", "app-server", "--stdio", "-c", 'model="gpt-5.5"']
