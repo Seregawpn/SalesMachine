@@ -168,6 +168,8 @@ class CodexProvider:
                 return agent_text
             elif event.kind == "error":
                 raise CodexProviderError(event.value)
+            elif event.kind == "mcp_elicitation_requested":
+                self._transport.send(codex_protocol.mcp_elicitation_response(event.value, "accept"))
 
     def close(self) -> None:
         self._transport.close()

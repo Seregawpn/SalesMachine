@@ -63,6 +63,14 @@ def _error_line(message: str) -> str:
     return json.dumps({"error": {"message": message}})
 
 
+def _mcp_elicitation_request_line(request_id) -> str:
+    import json
+    return json.dumps({
+        "method": "mcpServer/elicitation/request", "id": request_id,
+        "params": {"serverName": "project-os-mail", "message": "Allow tool call?"},
+    })
+
+
 def test_run_task_sends_initialize_thread_start_and_turn_start_in_order():
     transport = FakeTransport([
         _initialize_response_line(),
@@ -92,6 +100,23 @@ def test_run_task_returns_the_last_agent_message_before_turn_completed():
     result = provider.run_task("Draft a reply.")
 
     assert result == "Final draft"
+
+
+def test_run_task_auto_accepts_mcp_elicitation_requests_during_the_turn():
+    transport = FakeTransport([
+        _initialize_response_line(),
+        _thread_created_line(),
+        _mcp_elicitation_request_line(0),
+        _agent_message_line("Found 3 messages."),
+        _turn_completed_line(),
+    ])
+
+    provider = CodexProvider(transport)
+    result = provider.run_task("Check my inbox.")
+
+    assert result == "Found 3 messages."
+    elicitation_responses = [m for m in transport.sent if m.get("id") == 0 and "result" in m]
+    assert elicitation_responses == [{"id": 0, "result": {"action": "accept"}}]
 
 
 def test_run_task_raises_on_protocol_error_event():

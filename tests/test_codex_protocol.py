@@ -5,6 +5,7 @@ from project_os.ai.codex_protocol import (
     initialized_notification,
     thread_start_request,
     turn_start_request,
+    mcp_elicitation_response,
     parse_event,
 )
 
@@ -96,3 +97,23 @@ def test_parse_event_raises_on_malformed_json():
 
     with pytest.raises(CodexProtocolError):
         parse_event("not valid json{{{")
+
+
+def test_parse_event_extracts_mcp_elicitation_request_id():
+    line = json.dumps({
+        "method": "mcpServer/elicitation/request", "id": 0,
+        "params": {"serverName": "project-os-mail", "message": "Allow tool call?"},
+    })
+    event = parse_event(line)
+    assert event.kind == "mcp_elicitation_requested"
+    assert event.value == 0
+
+
+def test_mcp_elicitation_response_defaults_to_accept():
+    response = mcp_elicitation_response(0)
+    assert response == {"id": 0, "result": {"action": "accept"}}
+
+
+def test_mcp_elicitation_response_supports_other_actions():
+    response = mcp_elicitation_response("req-1", "decline")
+    assert response == {"id": "req-1", "result": {"action": "decline"}}

@@ -62,6 +62,21 @@ def turn_start_request(request_id: int, thread_id: str, prompt: str) -> dict:
     }
 
 
+def mcp_elicitation_response(request_id: int | str, action: str = "accept") -> dict:
+    """Reply to an `mcp_elicitation_requested` event.
+
+    Codex asks for explicit approval before running an MCP tool call even
+    under `approvalPolicy: "never"` (confirmed live: a real turn hung
+    indefinitely waiting for this exact reply). `action` is one of
+    "accept"/"decline"/"cancel" — CodexProvider always accepts, since the
+    only MCP servers it is ever configured with are Project OS's own
+    (read-only unless `allow_send=True` was explicitly passed), so there
+    is nothing here for the user to approve that Project OS didn't already
+    choose to expose.
+    """
+    return {"id": request_id, "result": {"action": action}}
+
+
 def parse_event(line: str) -> CodexEvent:
     try:
         message = json.loads(line)
@@ -79,6 +94,10 @@ def parse_event(line: str) -> CodexEvent:
         return CodexEvent("thread_created", thread["id"])
 
     method = message.get("method")
+
+    if method == "mcpServer/elicitation/request" and isinstance(message.get("id"), (int, str)):
+        return CodexEvent("mcp_elicitation_requested", message["id"])
+
     params = message.get("params", {})
     if not isinstance(params, dict):
         return CodexEvent("ignored")
