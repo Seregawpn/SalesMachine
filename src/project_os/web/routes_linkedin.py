@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, Form, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from project_os.db import get_connection
 from project_os.repositories.linkedin import list_linkedin_queue, set_linkedin_state
@@ -32,4 +32,6 @@ def update_linkedin_state(request: Request, project_id: int, project_contact_id:
         raise HTTPException(status_code=404, detail=str(e))
     finally:
         conn.close()
+    if request.headers.get("hx-request") == "true":
+        return HTMLResponse("")
     return RedirectResponse(url=f"/projects/{project_id}/linkedin", status_code=303)

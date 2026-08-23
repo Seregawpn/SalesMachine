@@ -12,7 +12,9 @@
       <tr>
         <td>{{ row["name"] }}</td>
         <td>
-          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state">
+          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+                hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+                hx-target="closest tr" hx-swap="outerHTML swap:0.2s">
             <input type="hidden" name="state" value="Pending Connection">
             <button type="submit">Connection sent</button>
           </form>
@@ -34,11 +36,15 @@
       <tr>
         <td>{{ row["name"] }}</td>
         <td>
-          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state">
+          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+                hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+                hx-target="closest tr" hx-swap="outerHTML swap:0.2s">
             <input type="hidden" name="state" value="Accepted">
             <button type="submit">Accepted</button>
           </form>
-          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state">
+          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+                hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+                hx-target="closest tr" hx-swap="outerHTML swap:0.2s">
             <input type="hidden" name="state" value="Not relevant">
             <button type="submit">Not relevant</button>
           </form>
@@ -60,7 +66,9 @@
       <tr>
         <td>{{ row["name"] }}</td>
         <td>
-          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state">
+          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+                hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+                hx-target="closest tr" hx-swap="outerHTML swap:0.2s">
             <input type="hidden" name="state" value="Message Sent">
             <button type="submit">Message sent</button>
           </form>
@@ -82,7 +90,9 @@
       <tr>
         <td>{{ row["name"] }}</td>
         <td>
-          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state">
+          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+                hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+                hx-target="closest tr" hx-swap="outerHTML swap:0.2s">
             <input type="hidden" name="state" value="Replied">
             <button type="submit">Replied</button>
           </form>

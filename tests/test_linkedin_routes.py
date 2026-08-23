@@ -111,3 +111,16 @@ def test_updating_linkedin_state_for_contact_in_another_project_returns_404(tmp_
     ).fetchone()
     conn.close()
     assert row["linkedin_state"] == "Not started"
+
+
+def test_changing_linkedin_state_via_hx_request_returns_an_empty_fragment(tmp_db_path):
+    client, project_id, pc_id = _client(tmp_db_path)
+
+    response = client.post(
+        f"/projects/{project_id}/linkedin/{pc_id}/state",
+        data={"state": "Pending Connection"},
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert response.text == ""
