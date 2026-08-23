@@ -176,7 +176,7 @@ def test_for_codex_cli_closes_transport_and_does_not_leak_process_on_init_failur
     monkeypatch.setattr(
         CodexProvider,
         "_codex_cli_command",
-        staticmethod(lambda codex_path, model: [sys.executable, str(FIXTURE_SCRIPT)]),
+        staticmethod(lambda codex_path, model, mcp_servers=None: [sys.executable, str(FIXTURE_SCRIPT)]),
     )
 
     # fake_app_server.py never replies to "initialize", so this times out
@@ -186,3 +186,32 @@ def test_for_codex_cli_closes_transport_and_does_not_leak_process_on_init_failur
 
     transport = created["transport"]
     assert transport._process.poll() is not None, "subprocess was leaked instead of being closed"
+
+
+def test_codex_cli_command_with_no_mcp_servers_is_unchanged():
+    command = CodexProvider._codex_cli_command("codex", "gpt-5.5")
+    assert command == ["codex", "app-server", "--stdio", "-c", 'model="gpt-5.5"']
+
+
+def test_codex_cli_command_adds_mcp_server_flags():
+    command = CodexProvider._codex_cli_command(
+        "codex", "gpt-5.5",
+        mcp_servers={"project-os-mail": ("python3", ["-m", "project_os.ai.mail_read_mcp_server"])},
+    )
+    assert command[:4] == ["codex", "app-server", "--stdio"][:3] + ["-c"]
+    assert '-c' in command
+    assert 'mcp_servers.project-os-mail.enabled=true' in command
+    assert 'mcp_servers.project-os-mail.command="python3"' in command
+    assert 'mcp_servers.project-os-mail.args=["-m", "project_os.ai.mail_read_mcp_server"]' in command
+
+
+def test_codex_cli_command_supports_multiple_mcp_servers():
+    command = CodexProvider._codex_cli_command(
+        "codex", "gpt-5.5",
+        mcp_servers={
+            "project-os-mail": ("python3", ["-m", "project_os.ai.mail_read_mcp_server"]),
+            "project-os-mail-send": ("python3", ["-m", "project_os.ai.mail_send_mcp_server"]),
+        },
+    )
+    assert 'mcp_servers.project-os-mail.enabled=true' in command
+    assert 'mcp_servers.project-os-mail-send.enabled=true' in command

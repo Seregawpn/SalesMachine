@@ -1,3 +1,4 @@
+import json
 from typing import Any, Protocol
 
 from project_os.ai import codex_protocol
@@ -30,20 +31,42 @@ class CodexProvider:
         self._initialize()
 
     @staticmethod
-    def _codex_cli_command(codex_path: str, model: str) -> list[str]:
-        return [codex_path, "app-server", "--stdio", "-c", f'model="{model}"']
+    def _codex_cli_command(
+        codex_path: str,
+        model: str,
+        mcp_servers: dict[str, tuple[str, list[str]]] | None = None,
+    ) -> list[str]:
+        command = [codex_path, "app-server", "--stdio", "-c", f'model="{model}"']
+        for name, (server_command, server_args) in (mcp_servers or {}).items():
+            command.extend([
+                "-c", f"mcp_servers.{name}.enabled=true",
+                "-c", f"mcp_servers.{name}.command={json.dumps(server_command)}",
+                "-c", f"mcp_servers.{name}.args={json.dumps(server_args)}",
+            ])
+        return command
 
     @classmethod
     def for_codex_cli(
-        cls, codex_path: str = "codex", model: str = "gpt-5.5", *, timeout: float = 30.0
+        cls,
+        codex_path: str = "codex",
+        model: str = "gpt-5.5",
+        mcp_servers: dict[str, tuple[str, list[str]]] | None = None,
+        *,
+        timeout: float = 30.0,
     ) -> "CodexProvider":
         """Build a CodexProvider that runs the real, locally installed Codex CLI.
+
+        `mcp_servers` maps a server name to `(command, args)` — e.g.
+        `{"project-os-mail": ("python3", ["-m", "project_os.ai.mail_read_mcp_server"])}` —
+        giving that Codex thread tool-level access to whatever the named
+        server exposes. Omit it (the default) for a plain text-only task
+        with no tools at all.
 
         Use this for production/manual use, never in the automated test
         suite — it spawns a real subprocess and, on first task, makes a
         real call through the user's authenticated Codex/ChatGPT account.
         """
-        transport = ProcessTransport(cls._codex_cli_command(codex_path, model))
+        transport = ProcessTransport(cls._codex_cli_command(codex_path, model, mcp_servers))
         try:
             return cls(transport, timeout=timeout)
         except Exception:
