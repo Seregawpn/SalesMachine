@@ -9,7 +9,7 @@ MIGRATIONS_DIR = Path(__file__).parent.parent / "src" / "project_os" / "migratio
 def test_run_migrations_creates_core_tables(tmp_db_path):
     conn = get_connection(tmp_db_path)
     version = run_migrations(conn, MIGRATIONS_DIR)
-    assert version == 2
+    assert version == 3
 
     tables = {
         row[0]
@@ -27,6 +27,7 @@ def test_run_migrations_creates_core_tables(tmp_db_path):
         "opportunities",
         "actions",
         "audit_log",
+        "interactions",
     }:
         assert expected in tables
 
@@ -35,10 +36,10 @@ def test_run_migrations_is_idempotent(tmp_db_path):
     conn = get_connection(tmp_db_path)
     first = run_migrations(conn, MIGRATIONS_DIR)
     second = run_migrations(conn, MIGRATIONS_DIR)
-    assert first == second == 2
+    assert first == second == 3
 
     count = conn.execute("SELECT COUNT(*) FROM schema_version").fetchone()[0]
-    assert count == 2
+    assert count == 3
 
 
 def test_get_connection_enables_wal_mode(tmp_db_path):
