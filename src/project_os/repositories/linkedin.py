@@ -30,6 +30,13 @@ def set_linkedin_state(
     project_id = row["project_id"]
     old_state = row["linkedin_state"]
 
+    if new_state == old_state:
+        # No-op transition: nothing changed, so don't write an audit row or
+        # re-trigger follow-up actions. Without this guard, a periodic sync
+        # job re-observing the same state every interval would flood the
+        # audit log with identical entries.
+        return
+
     conn.execute(
         """
         UPDATE project_contacts
