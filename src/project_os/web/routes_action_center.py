@@ -1,8 +1,12 @@
+from urllib.parse import quote
+
 from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import RedirectResponse
 
 from project_os.db import get_connection
-from project_os.repositories.actions import list_open_actions, complete_action, snooze_action
+from project_os.repositories.actions import list_open_actions, complete_action, snooze_action, get_reply_context
+from project_os.repositories.interactions import create_interaction
+from project_os.ai.mail_send_mcp_server import send_via_jxa, MailSendError
 
 router = APIRouter()
 
@@ -38,6 +42,42 @@ def snooze(request: Request, action_id: int, new_due_date: str = Form(...)):
         snooze_action(conn, action_id, new_due_date)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    finally:
+        conn.close()
+    return RedirectResponse(url="/action-center", status_code=303)
+
+
+@router.post("/actions/{action_id}/send")
+def send_reply(request: Request, action_id: int, message: str = Form(...)):
+    conn = get_connection(request.app.state.db_path)
+    try:
+        context = get_reply_context(conn, action_id)
+        if context is None:
+            raise HTTPException(status_code=404, detail=f"No sendable reply for action {action_id}")
+
+        action_row = conn.execute(
+            "SELECT project_id, linked_id FROM actions WHERE id = ?", (action_id,)
+        ).fetchone()
+
+        try:
+            send_via_jxa({"to": context["to"], "subject": context["subject"], "body": message})
+        except MailSendError as error:
+            return RedirectResponse(
+                url=f"/action-center?error={quote(str(error))}", status_code=303
+            )
+
+        conn.execute("BEGIN")
+        try:
+            complete_action(conn, action_id)
+            create_interaction(
+                conn, action_row["project_id"], action_row["linked_id"],
+                channel="email", direction="outbound", subject=context["subject"],
+                ai_summary=None, intent=None, external_message_id=None,
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
     finally:
         conn.close()
     return RedirectResponse(url="/action-center", status_code=303)
