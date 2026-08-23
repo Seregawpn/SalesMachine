@@ -46,7 +46,7 @@ class MailSendError(RuntimeError):
     """Raised when Apple Mail cannot send the message."""
 
 
-def _send_via_jxa(
+def send_via_jxa(
     payload: dict[str, Any],
     *,
     runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
@@ -93,7 +93,7 @@ def _send_message_result(
             "content": [{"type": "text", "text": f"Missing required argument(s): {', '.join(missing)}"}],
         }
     try:
-        _send_via_jxa({field: arguments[field] for field in _REQUIRED_FIELDS}, runner=runner)
+        send_via_jxa({field: arguments[field] for field in _REQUIRED_FIELDS}, runner=runner)
         return {"content": [{"type": "text", "text": f"Message sent to {arguments['to']}."}]}
     except Exception as error:
         return {"isError": True, "content": [{"type": "text", "text": f"Apple Mail error: {error}"}]}

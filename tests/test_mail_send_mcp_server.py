@@ -2,7 +2,7 @@ import json
 import subprocess
 import sys
 
-from project_os.ai.mail_send_mcp_server import handle_request, mcp_server_command, MailSendError, _send_via_jxa
+from project_os.ai.mail_send_mcp_server import handle_request, mcp_server_command, MailSendError, send_via_jxa
 
 
 def _fake_runner(returncode: int = 0, stderr: str = ""):
@@ -73,7 +73,7 @@ def test_unknown_tool_name_is_rejected():
 
 def test_send_via_jxa_raises_mail_send_error_on_failure():
     try:
-        _send_via_jxa({"to": "x@example.org", "subject": "s", "body": "b"}, runner=_fake_runner(returncode=1, stderr="boom"))
+        send_via_jxa({"to": "x@example.org", "subject": "s", "body": "b"}, runner=_fake_runner(returncode=1, stderr="boom"))
         assert False, "expected MailSendError"
     except MailSendError as error:
         assert "boom" in str(error)
