@@ -244,3 +244,88 @@ def test_action_center_shows_error_banner_from_query_param(tmp_db_path):
 
     assert response.status_code == 200
     assert "Mail is not configured." in response.text
+
+
+def test_completing_an_action_via_hx_request_returns_an_empty_fragment(tmp_db_path):
+    client, project_id = _client(tmp_db_path)
+    conn = get_connection(tmp_db_path)
+    row = conn.execute("SELECT id FROM actions LIMIT 1").fetchone()
+    conn.close()
+
+    response = client.post(f"/actions/{row['id']}/complete", headers={"HX-Request": "true"})
+
+    assert response.status_code == 200
+    assert response.text == ""
+
+
+def test_snoozing_an_action_via_hx_request_returns_the_row_partial(tmp_db_path):
+    client, project_id = _client(tmp_db_path)
+    conn = get_connection(tmp_db_path)
+    row = conn.execute("SELECT id FROM actions LIMIT 1").fetchone()
+    conn.close()
+
+    response = client.post(
+        f"/actions/{row['id']}/snooze",
+        data={"new_due_date": "2026-09-20"},
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert "<html" not in response.text
+    assert "2026-09-20" in response.text
+    assert f'id="action-row-{row["id"]}"' in response.text
+
+
+def test_sending_a_reply_via_hx_request_returns_an_empty_fragment_on_success(tmp_db_path, monkeypatch):
+    client, project_id, action_id = _client_with_reply_action(tmp_db_path)
+
+    def fake_send_via_jxa(payload, *, runner=None):
+        pass
+
+    monkeypatch.setattr("project_os.web.routes_action_center.send_via_jxa", fake_send_via_jxa)
+
+    response = client.post(
+        f"/actions/{action_id}/send",
+        data={"message": "Edited reply text."},
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert response.text == ""
+
+
+def test_sending_a_reply_via_hx_request_returns_row_and_oob_banner_on_failure(tmp_db_path, monkeypatch):
+    client, project_id, action_id = _client_with_reply_action(tmp_db_path)
+
+    def fake_send_via_jxa(payload, *, runner=None):
+        raise MailSendError("Mail is not configured.")
+
+    monkeypatch.setattr("project_os.web.routes_action_center.send_via_jxa", fake_send_via_jxa)
+
+    response = client.post(
+        f"/actions/{action_id}/send",
+        data={"message": "Edited reply text."},
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert f'id="action-row-{action_id}"' in response.text
+    assert 'hx-swap-oob="true"' in response.text
+    assert "Mail is not configured." in response.text
+    conn = get_connection(tmp_db_path)
+    assert len(list_open_actions(conn, project_id)) == 1
+    conn.close()
+
+
+def test_sending_a_blank_reply_via_hx_request_returns_row_and_oob_banner(tmp_db_path):
+    client, project_id, action_id = _client_with_reply_action(tmp_db_path)
+
+    response = client.post(
+        f"/actions/{action_id}/send",
+        data={"message": "   "},
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert 'hx-swap-oob="true"' in response.text
+    assert "Reply text cannot be empty." in response.text

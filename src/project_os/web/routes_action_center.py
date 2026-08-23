@@ -1,14 +1,30 @@
 from urllib.parse import quote
 
 from fastapi import APIRouter, Request, Form, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from project_os.db import get_connection
 from project_os.repositories.actions import list_open_actions, complete_action, snooze_action, get_reply_context
 from project_os.repositories.interactions import create_interaction
-from project_os.ai.mail_send_mcp_server import send_via_jxa
+from project_os.ai.mail_send_mcp_server import send_via_jxa, MailSendError
 
 router = APIRouter()
+
+
+def _is_hx(request: Request) -> bool:
+    return request.headers.get("hx-request") == "true"
+
+
+def _render_action_row(request: Request, conn, action_id: int):
+    action_row = conn.execute("SELECT * FROM actions WHERE id = ?", (action_id,)).fetchone()
+    reply = get_reply_context(conn, action_id)
+    return request.app.state.templates.get_template("_action_row.html").render(
+        {"action": action_row, "reply_contexts": {action_id: reply}}
+    )
+
+
+def _render_flash_banner(request: Request, error_message: str) -> str:
+    return request.app.state.templates.get_template("_flash_banner.html").render({"error": error_message})
 
 
 @router.get("/action-center")
@@ -38,6 +54,8 @@ def complete(request: Request, action_id: int):
         raise HTTPException(status_code=404, detail=str(e))
     finally:
         conn.close()
+    if _is_hx(request):
+        return HTMLResponse("")
     return RedirectResponse(url="/action-center", status_code=303)
 
 
@@ -46,6 +64,8 @@ def snooze(request: Request, action_id: int, new_due_date: str = Form(...)):
     conn = get_connection(request.app.state.db_path)
     try:
         snooze_action(conn, action_id, new_due_date)
+        if _is_hx(request):
+            return HTMLResponse(_render_action_row(request, conn, action_id))
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
     finally:
@@ -56,12 +76,18 @@ def snooze(request: Request, action_id: int, new_due_date: str = Form(...)):
 @router.post("/actions/{action_id}/send")
 def send_reply(request: Request, action_id: int, message: str = Form(...)):
     conn = get_connection(request.app.state.db_path)
+    is_hx = _is_hx(request)
     try:
         context = get_reply_context(conn, action_id)
         if context is None:
             raise HTTPException(status_code=404, detail=f"No sendable reply for action {action_id}")
 
         if not message.strip():
+            if is_hx:
+                return HTMLResponse(
+                    _render_action_row(request, conn, action_id)
+                    + _render_flash_banner(request, "Reply text cannot be empty.")
+                )
             return RedirectResponse(
                 url="/action-center?error=Reply text cannot be empty.", status_code=303
             )
@@ -73,6 +99,11 @@ def send_reply(request: Request, action_id: int, message: str = Form(...)):
         try:
             send_via_jxa({"to": context["to"], "subject": context["subject"], "body": message})
         except Exception as error:
+            if is_hx:
+                return HTMLResponse(
+                    _render_action_row(request, conn, action_id)
+                    + _render_flash_banner(request, str(error))
+                )
             return RedirectResponse(
                 url=f"/action-center?error={quote(str(error))}", status_code=303
             )
@@ -89,6 +120,9 @@ def send_reply(request: Request, action_id: int, message: str = Form(...)):
         except Exception:
             conn.rollback()
             raise
+
+        if is_hx:
+            return HTMLResponse("")
     finally:
         conn.close()
     return RedirectResponse(url="/action-center", status_code=303)

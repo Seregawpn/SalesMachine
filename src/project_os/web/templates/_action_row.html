@@ -1,0 +1,34 @@
+<tr id="action-row-{{ action['id'] }}">
+  <td><span class="badge badge-{{ action['priority']|lower }}">{{ action["priority"] }}</span></td>
+  <td><a href="/projects/{{ action['project_id'] }}">Project {{ action['project_id'] }}</a></td>
+  <td>{{ action["module"] }}</td>
+  <td>{{ action["reason"] }}</td>
+  <td>{{ action["due_date"] or "Unknown" }}</td>
+  <td>
+    <form method="post" action="/actions/{{ action['id'] }}/complete"
+          hx-post="/actions/{{ action['id'] }}/complete"
+          hx-target="#action-row-{{ action['id'] }}" hx-swap="outerHTML swap:0.2s">
+      <button type="submit">Done</button>
+    </form>
+    <form method="post" action="/actions/{{ action['id'] }}/snooze"
+          hx-post="/actions/{{ action['id'] }}/snooze"
+          hx-target="#action-row-{{ action['id'] }}" hx-swap="outerHTML">
+      <label for="snooze-{{ action['id'] }}" class="sr-only">New due date for {{ action["reason"] }}</label>
+      <input type="date" id="snooze-{{ action['id'] }}" name="new_due_date" required>
+      <button type="submit">Snooze</button>
+    </form>
+    {% set reply = reply_contexts.get(action['id']) %}
+    {% if reply %}
+    <details>
+      <summary>Reply draft ▾</summary>
+      <form method="post" action="/actions/{{ action['id'] }}/send"
+            hx-post="/actions/{{ action['id'] }}/send"
+            hx-target="#action-row-{{ action['id'] }}" hx-swap="outerHTML swap:0.2s">
+        <label for="message-{{ action['id'] }}" class="sr-only">Reply text for {{ action["reason"] }}</label>
+        <textarea id="message-{{ action['id'] }}" name="message" rows="6" required>{{ reply["body"] }}</textarea>
+        <button type="submit">Approve &amp; Send</button>
+      </form>
+    </details>
+    {% endif %}
+  </td>
+</tr>
