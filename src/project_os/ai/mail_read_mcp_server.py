@@ -39,7 +39,7 @@ function run(argv) {
     }
   }
 
-  function messageAccount(message) {
+  function messageAccountName(message) {
     return value(() => message.mailbox().account().name(), "");
   }
 
@@ -50,7 +50,7 @@ function run(argv) {
       sender: value(() => message.sender(), ""),
       date_received: value(() => message.dateReceived(), ""),
       mailbox: value(() => message.mailbox().name(), ""),
-      account: messageAccount(message),
+      account: messageAccountName(message),
       read: boolValue(() => message.readStatus(), false)
     };
     if (includeBody) {
@@ -68,11 +68,6 @@ function run(argv) {
     return names.length > 0 ? names : null;
   }
 
-  function matchesAccountFilter(message, accountFilter) {
-    if (!accountFilter) return true;
-    return accountFilter.indexOf(messageAccount(message).toLowerCase()) !== -1;
-  }
-
   function limitNumber(value, fallback) {
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed < 1) return fallback;
@@ -85,16 +80,45 @@ function run(argv) {
     return Math.min(Math.floor(parsed), 250);
   }
 
+  function targetAccounts(accountFilter) {
+    let all = [];
+    try {
+      all = Mail.accounts().filter(a => boolValue(() => a.enabled(), true));
+    } catch (_) {
+      all = [];
+    }
+    if (!accountFilter) return all;
+    return all.filter(a => accountFilter.indexOf(value(() => a.name(), "").toLowerCase()) !== -1);
+  }
+
+  function accountInbox(account) {
+    try {
+      const matches = account.mailboxes.whose({ name: "INBOX" })();
+      if (matches.length > 0) return matches[0];
+    } catch (_) {}
+    return null;
+  }
+
+  function dateMs(dateReceivedString) {
+    const parsed = Date.parse(dateReceivedString);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
   const mode = request.mode || "recent";
   const limit = limitNumber(request.limit, 10);
   const maxScan = maxScanNumber(request.max_scan, 100);
   const accountFilter = accountFilterList(request.account);
-  const inboxMessages = Mail.inbox.messages();
-  let selected = [];
-  let scanned = 0;
 
   if (mode === "read") {
+    // Message lookup by exact id: the aggregated Mail.inbox is fine here
+    // (and simpler) because this loop stops the instant it finds a match
+    // - it never has to scan far in practice, unlike unread/recent/search
+    // which need to look across the whole (or a bounded slice of the)
+    // mailbox to decide what to return.
     const requestedId = String(request.id || "");
+    const inboxMessages = Mail.inbox.messages();
+    let selected = [];
+    let scanned = 0;
     for (const message of inboxMessages) {
       scanned += 1;
       if (value(() => message.id(), "") === requestedId) {
@@ -103,61 +127,68 @@ function run(argv) {
       }
       if (scanned >= maxScan) break;
     }
-  } else if (mode === "unread") {
-    // A plain bounded loop, not Mail.inbox.messages.whose({readStatus: false})():
-    // .whose() forces Mail to evaluate the predicate against the entire
-    // inbox before returning anything, which hangs on a large or
-    // IMAP-backed mailbox even when Mail itself is healthy (confirmed
-    // live against a ~5,400-message "All Mail"-mapped inbox: .whose()
-    // timed out repeatedly while a bounded loop over just the first
-    // maxScan messages - mirroring "recent" mode, which is reliably fast
-    // - returned promptly). This can miss an unread message older than
-    // the first maxScan messages in the mailbox's natural order, which is
-    // an acceptable tradeoff: callers only need recent, sales-relevant
-    // replies, not exhaustive history.
+    return JSON.stringify({ messages: selected, scanned: scanned });
+  }
+
+  // unread / recent / search: fan out across each target account's own
+  // INBOX individually, never the aggregated Mail.inbox. Scanning (or
+  // .whose()-filtering) the aggregated inbox as one query hangs on a
+  // large or IMAP-backed mailbox (confirmed live: repeated 60s timeouts
+  // against a ~5,400-message aggregate), and even a bounded scan of it is
+  // skewed toward whichever account has the most traffic - a low-volume
+  // account's recent mail can sit entirely outside that scan window
+  // (confirmed live: a 250-message aggregate scan found zero messages
+  // from an account whose own INBOX has only 2). Querying each account's
+  // own INBOX directly with a small per-account budget fixes both: each
+  // account gets a guaranteed slice regardless of the others' volume, and
+  // no single query ever touches more than a small, bounded set of
+  // messages.
+  const accounts = targetAccounts(accountFilter);
+  const perAccountMaxScan = Math.max(20, Math.ceil(maxScan / Math.max(accounts.length, 1)));
+  const query = String(request.query || "").toLowerCase();
+
+  let collected = [];
+  let totalScanned = 0;
+
+  for (const account of accounts) {
+    const inbox = accountInbox(account);
+    if (!inbox) continue;
+    let inboxMessages = [];
+    try {
+      inboxMessages = inbox.messages();
+    } catch (_) {
+      inboxMessages = [];
+    }
+
+    let accountScanned = 0;
     for (const message of inboxMessages) {
-      scanned += 1;
-      if (boolValue(() => message.readStatus(), false) === false && matchesAccountFilter(message, accountFilter)) {
-        selected.push(messageRecord(message, false));
-        if (selected.length >= limit) break;
+      accountScanned += 1;
+      totalScanned += 1;
+
+      let matches = true;
+      if (mode === "unread") {
+        matches = boolValue(() => message.readStatus(), false) === false;
+      } else if (mode === "search") {
+        if (!query) {
+          matches = false;
+        } else {
+          const subject = value(() => message.subject(), "").toLowerCase();
+          const sender = value(() => message.sender(), "").toLowerCase();
+          matches = subject.indexOf(query) !== -1 || sender.indexOf(query) !== -1;
+        }
       }
-      if (scanned >= maxScan) break;
-    }
-  } else if (mode === "search") {
-    const query = String(request.query || "");
-    let combined = [];
-    if (query) {
-      let inboxMatches = [];
-      try {
-        inboxMatches = Mail.inbox.messages.whose({
-          _or: [
-            { sender: { _contains: query } },
-            { subject: { _contains: query } }
-          ]
-        })();
-      } catch (_) {
-        inboxMatches = [];
+
+      if (matches) {
+        collected.push(messageRecord(message, false));
       }
-      combined = inboxMatches;
-      scanned = inboxMatches.length;
-    }
-    for (let i = 0; i < combined.length && selected.length < limit; i++) {
-      if (matchesAccountFilter(combined[i], accountFilter)) {
-        selected.push(messageRecord(combined[i], false));
-      }
-    }
-  } else {
-    for (const message of inboxMessages) {
-      scanned += 1;
-      if (matchesAccountFilter(message, accountFilter)) {
-        selected.push(messageRecord(message, false));
-        if (selected.length >= limit) break;
-      }
-      if (scanned >= maxScan) break;
+      if (accountScanned >= perAccountMaxScan) break;
     }
   }
 
-  return JSON.stringify({ messages: selected, scanned: scanned });
+  collected.sort((a, b) => dateMs(b.date_received) - dateMs(a.date_received));
+  const selected = collected.slice(0, limit);
+
+  return JSON.stringify({ messages: selected, scanned: totalScanned });
 }
 """
 
