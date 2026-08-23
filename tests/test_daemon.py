@@ -16,7 +16,7 @@ def test_scheduler_runs_backup_and_consistency_jobs(tmp_db_path, tmp_path):
     conn.close()
 
     backup_dir = tmp_path / "backups"
-    scheduler = build_scheduler(tmp_db_path, backup_dir, include_unipile=False)
+    scheduler = build_scheduler(tmp_db_path, backup_dir, include_unipile=False, include_mail_sync=False)
 
     ran = scheduler.run_pending(now=0.0)
 
@@ -38,7 +38,7 @@ def test_unipile_job_skips_silently_when_no_keychain_entry(tmp_db_path, tmp_path
     conn.close()
 
     backup_dir = tmp_path / "backups"
-    scheduler = build_scheduler(tmp_db_path, backup_dir, include_unipile=True)
+    scheduler = build_scheduler(tmp_db_path, backup_dir, include_unipile=True, include_mail_sync=False)
 
     # This should not raise even though no Keychain entry exists for a fresh test env
     # (or, if one happens to exist locally, the job may run without error).

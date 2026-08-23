@@ -24,6 +24,7 @@ def build_scheduler(
     db_path: str,
     backup_dir: Path,
     include_unipile: bool = True,
+    include_mail_sync: bool = True,
     codex_path: str = "codex",
 ) -> Scheduler:
     scheduler = Scheduler()
@@ -52,6 +53,12 @@ def build_scheduler(
         conn.close()
 
     def _mail_sync_job() -> None:
+        # KNOWN LIMITATION: check_for_new_mail has no project-scoping — with
+        # multiple active projects, each project's sync tick makes its own full
+        # Codex/Mail.app call and could record the same real-world email into
+        # more than one project's CRM. Fine for a single-project deployment;
+        # needs project-scoped relevance criteria before a second project goes
+        # live. See final review of docs/superpowers/plans/2026-08-23-mail-sync-crm.md.
         from project_os.ai.codex_provider import CodexProvider
         from project_os.ai.mail_read_mcp_server import mcp_server_command
         from project_os.ai.mail_sync import sync_mail_replies
@@ -80,7 +87,8 @@ def build_scheduler(
     scheduler.register("pipeline_consistency", interval_seconds=15 * 60, func=_consistency_job)
     if include_unipile:
         scheduler.register("unipile_sync", interval_seconds=15 * 60, func=_unipile_sync_job)
-    scheduler.register("mail_sync", interval_seconds=15 * 60, func=_mail_sync_job)
+    if include_mail_sync:
+        scheduler.register("mail_sync", interval_seconds=15 * 60, func=_mail_sync_job)
     return scheduler
 
 
