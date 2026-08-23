@@ -22,13 +22,13 @@
       <td>{{ opp["contact_name"] or "Unknown" }}</td>
       <td>
         <form method="post" action="/projects/{{ project_id }}/pipeline/{{ opp['id'] }}/stage">
-          <label for="stage-{{ opp['id'] }}" class="sr-only">Stage for {{ opp["organization_name"] }}</label>
-          <select id="stage-{{ opp['id'] }}" name="stage" onchange="this.form.submit()">
+          <label for="stage-{{ opp['id'] }}" class="sr-only">Stage for {{ opp["organization_name"] or "Unknown" }}</label>
+          <select id="stage-{{ opp['id'] }}" name="stage">
             {% for stage in stages %}
             <option value="{{ stage }}" {% if stage == opp["stage"] %}selected{% endif %}>{{ stage }}</option>
             {% endfor %}
           </select>
-          <noscript><button type="submit">Update stage</button></noscript>
+          <button type="submit">Update stage</button>
         </form>
       </td>
       <td>{{ opp["value"] or "Unknown" }}</td>
