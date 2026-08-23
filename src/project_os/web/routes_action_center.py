@@ -27,6 +27,9 @@ def _render_flash_banner(request: Request, error_message: str) -> str:
     return request.app.state.templates.get_template("_flash_banner.html").render({"error": error_message})
 
 
+_BANNER_RESET = '<p id="flash-banner" role="alert" class="flash-error" hx-swap-oob="true" hidden></p>'
+
+
 @router.get("/action-center")
 def action_center(request: Request):
     conn = get_connection(request.app.state.db_path)
@@ -55,7 +58,7 @@ def complete(request: Request, action_id: int):
     finally:
         conn.close()
     if _is_hx(request):
-        return HTMLResponse("")
+        return HTMLResponse(_BANNER_RESET)
     return RedirectResponse(url="/action-center", status_code=303)
 
 
@@ -84,10 +87,9 @@ def send_reply(request: Request, action_id: int, message: str = Form(...)):
 
         if not message.strip():
             if is_hx:
-                return HTMLResponse(
-                    _render_action_row(request, conn, action_id)
-                    + _render_flash_banner(request, "Reply text cannot be empty.")
-                )
+                response = HTMLResponse(_render_flash_banner(request, "Reply text cannot be empty."))
+                response.headers["HX-Reswap"] = "none"
+                return response
             return RedirectResponse(
                 url="/action-center?error=Reply text cannot be empty.", status_code=303
             )
@@ -100,10 +102,9 @@ def send_reply(request: Request, action_id: int, message: str = Form(...)):
             send_via_jxa({"to": context["to"], "subject": context["subject"], "body": message})
         except Exception as error:
             if is_hx:
-                return HTMLResponse(
-                    _render_action_row(request, conn, action_id)
-                    + _render_flash_banner(request, str(error))
-                )
+                response = HTMLResponse(_render_flash_banner(request, str(error)))
+                response.headers["HX-Reswap"] = "none"
+                return response
             return RedirectResponse(
                 url=f"/action-center?error={quote(str(error))}", status_code=303
             )
@@ -122,7 +123,7 @@ def send_reply(request: Request, action_id: int, message: str = Form(...)):
             raise
 
         if is_hx:
-            return HTMLResponse("")
+            return HTMLResponse(_BANNER_RESET)
     finally:
         conn.close()
     return RedirectResponse(url="/action-center", status_code=303)
