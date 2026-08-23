@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from project_os.db import get_connection, run_migrations
 from project_os.repositories.projects import create_project
 from project_os.repositories.actions import (
@@ -46,6 +48,20 @@ def test_snooze_action_updates_due_date_and_keeps_it_open(tmp_db_path):
 
     rows = list_open_actions(conn, project_id)
     assert rows[0]["due_date"] == "2026-09-01"
+
+
+def test_complete_action_raises_lookup_error_for_missing_id(tmp_db_path):
+    conn, project_id = _setup(tmp_db_path)
+
+    with pytest.raises(LookupError):
+        complete_action(conn, 999999)
+
+
+def test_snooze_action_raises_lookup_error_for_missing_id(tmp_db_path):
+    conn, project_id = _setup(tmp_db_path)
+
+    with pytest.raises(LookupError):
+        snooze_action(conn, 999999, "2026-09-01")
 
 
 def test_has_open_action_for_prevents_duplicates(tmp_db_path):

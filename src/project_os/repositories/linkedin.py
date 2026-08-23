@@ -16,17 +16,24 @@ def set_linkedin_state(
     conn: sqlite3.Connection,
     project_contact_id: int,
     new_state: str,
+    project_id: int | None = None,
     actor: str = "user",
 ) -> None:
     if new_state not in LINKEDIN_STATES:
         raise ValueError(f"Unknown LinkedIn state: {new_state}")
 
-    row = conn.execute(
-        "SELECT project_id, linkedin_state FROM project_contacts WHERE id = ?",
-        (project_contact_id,),
-    ).fetchone()
+    if project_id is None:
+        row = conn.execute(
+            "SELECT project_id, linkedin_state FROM project_contacts WHERE id = ?",
+            (project_contact_id,),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT project_id, linkedin_state FROM project_contacts WHERE id = ? AND project_id = ?",
+            (project_contact_id, project_id),
+        ).fetchone()
     if row is None:
-        raise ValueError(f"No project_contact with id {project_contact_id}")
+        raise LookupError(f"No project_contact with id {project_contact_id}")
     project_id = row["project_id"]
     old_state = row["linkedin_state"]
 

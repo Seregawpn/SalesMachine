@@ -60,6 +60,15 @@ def test_project_overview_shows_needs_attention_actions(tmp_db_path):
     assert "Needs attention" in response.text
 
 
+def test_project_overview_links_to_linkedin_queue(tmp_db_path):
+    client, project_id, opp_id = _client(tmp_db_path)
+
+    response = client.get(f"/projects/{project_id}")
+
+    assert response.status_code == 200
+    assert f'href="/projects/{project_id}/linkedin"' in response.text
+
+
 def test_changing_stage_to_invalid_value_returns_400(tmp_db_path):
     client, project_id, opp_id = _client(tmp_db_path)
 
@@ -77,3 +86,34 @@ def test_project_overview_for_nonexistent_project_returns_404(tmp_db_path):
     response = client.get(f"/projects/{project_id + 999}")
 
     assert response.status_code == 404
+
+
+def test_changing_stage_for_missing_opportunity_returns_404(tmp_db_path):
+    client, project_id, opp_id = _client(tmp_db_path)
+
+    response = client.post(
+        f"/projects/{project_id}/pipeline/{opp_id + 999}/stage",
+        data={"stage": "Contacted"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_changing_stage_via_a_different_projects_url_returns_404_and_leaves_it_unchanged(tmp_db_path):
+    client, project_id, opp_id = _client(tmp_db_path)
+
+    conn = get_connection(tmp_db_path)
+    other_project_id = create_project(conn, "Other Project")
+    conn.close()
+
+    response = client.post(
+        f"/projects/{other_project_id}/pipeline/{opp_id}/stage",
+        data={"stage": "Contacted"},
+    )
+
+    assert response.status_code == 404
+
+    conn = get_connection(tmp_db_path)
+    row = conn.execute("SELECT stage FROM opportunities WHERE id = ?", (opp_id,)).fetchone()
+    conn.close()
+    assert row["stage"] == "Research"

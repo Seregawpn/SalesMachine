@@ -43,14 +43,18 @@ def list_open_actions(conn: sqlite3.Connection, project_id: int | None = None) -
 
 
 def complete_action(conn: sqlite3.Connection, action_id: int) -> None:
-    conn.execute(
+    cur = conn.execute(
         "UPDATE actions SET status = 'Completed', completed_at = datetime('now') WHERE id = ?",
         (action_id,),
     )
+    if cur.rowcount == 0:
+        raise LookupError(f"No action with id {action_id}")
 
 
 def snooze_action(conn: sqlite3.Connection, action_id: int, new_due_date: str) -> None:
-    conn.execute("UPDATE actions SET due_date = ? WHERE id = ?", (new_due_date, action_id))
+    cur = conn.execute("UPDATE actions SET due_date = ? WHERE id = ?", (new_due_date, action_id))
+    if cur.rowcount == 0:
+        raise LookupError(f"No action with id {action_id}")
 
 
 def has_open_action_for(conn: sqlite3.Connection, linked_table: str, linked_id: int, reason: str) -> bool:

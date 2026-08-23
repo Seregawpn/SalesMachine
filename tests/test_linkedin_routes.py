@@ -78,7 +78,7 @@ def test_invalid_state_returns_400(tmp_db_path):
     assert response.status_code == 400
 
 
-def test_missing_project_contact_returns_400(tmp_db_path):
+def test_missing_project_contact_returns_404(tmp_db_path):
     client, project_id, pc_id = _client(tmp_db_path)
 
     response = client.post(
@@ -87,4 +87,27 @@ def test_missing_project_contact_returns_400(tmp_db_path):
         follow_redirects=True,
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 404
+
+
+def test_updating_linkedin_state_for_contact_in_another_project_returns_404(tmp_db_path):
+    client, project_id, pc_id = _client(tmp_db_path)
+
+    conn = get_connection(tmp_db_path)
+    other_project_id = create_project(conn, "Other Project")
+    conn.close()
+
+    response = client.post(
+        f"/projects/{other_project_id}/linkedin/{pc_id}/state",
+        data={"state": "Pending Connection"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 404
+
+    conn = get_connection(tmp_db_path)
+    row = conn.execute(
+        "SELECT linkedin_state FROM project_contacts WHERE id = ?", (pc_id,)
+    ).fetchone()
+    conn.close()
+    assert row["linkedin_state"] == "Not started"

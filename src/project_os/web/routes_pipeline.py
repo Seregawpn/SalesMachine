@@ -11,8 +11,10 @@ router = APIRouter()
 @router.get("/projects/{project_id}/pipeline")
 def pipeline(request: Request, project_id: int):
     conn = get_connection(request.app.state.db_path)
-    opportunities = list_pipeline(conn, project_id)
-    conn.close()
+    try:
+        opportunities = list_pipeline(conn, project_id)
+    finally:
+        conn.close()
     return request.app.state.templates.TemplateResponse(
         request,
         "pipeline.html",
@@ -24,9 +26,11 @@ def pipeline(request: Request, project_id: int):
 def change_stage(request: Request, project_id: int, opportunity_id: int, stage: str = Form(...)):
     conn = get_connection(request.app.state.db_path)
     try:
-        update_stage(conn, opportunity_id, stage, actor="user")
+        update_stage(conn, opportunity_id, stage, project_id=project_id, actor="user")
     except ValueError as e:
-        conn.close()
         raise HTTPException(status_code=400, detail=str(e))
-    conn.close()
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    finally:
+        conn.close()
     return RedirectResponse(url=f"/projects/{project_id}/pipeline", status_code=303)

@@ -27,7 +27,7 @@ def test_rejects_unknown_state(tmp_db_path):
 
 def test_rejects_invalid_project_contact_id(tmp_db_path):
     conn, project_id, pc_id = _setup(tmp_db_path)
-    with pytest.raises(ValueError, match="No project_contact with id"):
+    with pytest.raises(LookupError, match="No project_contact with id"):
         set_linkedin_state(conn, 999, "Accepted")
 
 

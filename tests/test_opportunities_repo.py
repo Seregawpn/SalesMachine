@@ -67,6 +67,25 @@ def test_update_stage_rejects_unknown_stage(tmp_db_path):
         update_stage(conn, opp_id, "Not A Real Stage")
 
 
+def test_update_stage_raises_lookup_error_for_missing_opportunity(tmp_db_path):
+    conn, project_id, contact_id, org_id = _setup(tmp_db_path)
+
+    with pytest.raises(LookupError):
+        update_stage(conn, 999999, "Contacted")
+
+
+def test_update_stage_raises_lookup_error_when_opportunity_belongs_to_different_project(tmp_db_path):
+    conn, project_id, contact_id, org_id = _setup(tmp_db_path)
+    opp_id = create_opportunity(conn, project_id, contact_id=contact_id, organization_id=org_id)
+    other_project_id = create_project(conn, "Other Project")
+
+    with pytest.raises(LookupError):
+        update_stage(conn, opp_id, "Contacted", project_id=other_project_id)
+
+    row = conn.execute("SELECT stage FROM opportunities WHERE id = ?", (opp_id,)).fetchone()
+    assert row["stage"] == "Research"
+
+
 def test_list_pipeline_returns_joined_rows(tmp_db_path):
     conn, project_id, contact_id, org_id = _setup(tmp_db_path)
     opp_id = create_opportunity(conn, project_id, contact_id=contact_id, organization_id=org_id)
@@ -78,3 +97,14 @@ def test_list_pipeline_returns_joined_rows(tmp_db_path):
     assert rows[0]["contact_name"] == "Jane Smith"
     assert rows[0]["next_action"] == "Send proposal"
     assert rows[0]["next_action_due"] == "2026-09-01"
+
+
+def test_list_pipeline_orders_by_pipeline_stage_not_alphabetically(tmp_db_path):
+    conn, project_id, contact_id, org_id = _setup(tmp_db_path)
+    paid_id = create_opportunity(conn, project_id, contact_id=contact_id, organization_id=org_id, stage="Paid")
+    research_id = create_opportunity(conn, project_id, contact_id=contact_id, organization_id=org_id, stage="Research")
+    contacted_id = create_opportunity(conn, project_id, contact_id=contact_id, organization_id=org_id, stage="Contacted")
+
+    rows = list_pipeline(conn, project_id)
+
+    assert [r["id"] for r in rows] == [research_id, contacted_id, paid_id]
