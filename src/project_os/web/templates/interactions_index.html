@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Interactions — Project OS{% endblock %}
+{% block content %}
+<h2>Interactions</h2>
+<table>
+  <caption class="sr-only">Most recent communication across every project</caption>
+  <thead>
+    <tr>
+      <th scope="col">Date</th>
+      <th scope="col">Contact</th>
+      <th scope="col">Project</th>
+      <th scope="col">Channel</th>
+      <th scope="col">Direction</th>
+      <th scope="col">Subject</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for interaction in interactions %}
+    <tr>
+      <td>{{ interaction["created_at"] }}</td>
+      <td>{{ interaction["contact_name"] }}</td>
+      <td>{{ interaction["project_name"] }}</td>
+      <td>{{ interaction["channel"] }}</td>
+      <td>{{ interaction["direction"] }}</td>
+      <td>{{ interaction["subject"] or "Unknown" }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6">No interactions yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

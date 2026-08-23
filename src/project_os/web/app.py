@@ -34,6 +34,9 @@ def create_app(db_path: str) -> FastAPI:
     from project_os.web.routes_contacts import router as contacts_router
     app.include_router(contacts_router)
 
+    from project_os.web.routes_interactions import router as interactions_router
+    app.include_router(interactions_router)
+
     return app
 
 

@@ -32,3 +32,17 @@ def get_interaction_by_external_id(
         "SELECT * FROM interactions WHERE project_id = ? AND external_message_id = ?",
         (project_id, external_message_id),
     ).fetchone()
+
+
+def list_interactions(conn: sqlite3.Connection, limit: int = 50) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT i.*, c.name AS contact_name, p.name AS project_name
+        FROM interactions i
+        JOIN contacts c ON c.id = i.contact_id
+        JOIN projects p ON p.id = i.project_id
+        ORDER BY i.created_at DESC, i.id DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()

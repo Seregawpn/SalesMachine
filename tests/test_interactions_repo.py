@@ -3,7 +3,7 @@ from pathlib import Path
 from project_os.db import get_connection, run_migrations
 from project_os.repositories.projects import create_project
 from project_os.repositories.contacts import create_contact
-from project_os.repositories.interactions import create_interaction, get_interaction_by_external_id
+from project_os.repositories.interactions import create_interaction, get_interaction_by_external_id, list_interactions
 
 MIGRATIONS_DIR = Path(__file__).parent.parent / "src" / "project_os" / "migrations"
 
@@ -66,3 +66,37 @@ def test_get_interaction_by_external_id_is_scoped_by_project(tmp_db_path):
     found_in_other_project = get_interaction_by_external_id(conn, other_project_id, "15082")
 
     assert found_in_other_project is None
+
+
+def test_list_interactions_returns_most_recent_first_with_contact_and_project_names(tmp_db_path):
+    conn, project_id, contact_id = _setup(tmp_db_path)
+    create_interaction(
+        conn, project_id, contact_id,
+        channel="email", direction="inbound", subject="First",
+        ai_summary=None, intent=None, external_message_id="1",
+    )
+    create_interaction(
+        conn, project_id, contact_id,
+        channel="email", direction="outbound", subject="Second",
+        ai_summary=None, intent=None, external_message_id="2",
+    )
+
+    interactions = list_interactions(conn)
+
+    assert [i["subject"] for i in interactions] == ["Second", "First"]
+    assert interactions[0]["contact_name"] == "Jane Smith"
+    assert interactions[0]["project_name"] == "Nexy"
+
+
+def test_list_interactions_respects_the_limit(tmp_db_path):
+    conn, project_id, contact_id = _setup(tmp_db_path)
+    for i in range(3):
+        create_interaction(
+            conn, project_id, contact_id,
+            channel="email", direction="inbound", subject=f"Message {i}",
+            ai_summary=None, intent=None, external_message_id=str(i),
+        )
+
+    interactions = list_interactions(conn, limit=2)
+
+    assert len(interactions) == 2
