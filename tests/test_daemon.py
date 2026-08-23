@@ -45,3 +45,38 @@ def test_unipile_job_skips_silently_when_no_keychain_entry(tmp_db_path, tmp_path
     ran = scheduler.run_pending(now=0.0)
     assert "backup" in ran
     assert "pipeline_consistency" in ran
+
+
+def test_build_scheduler_registers_mail_sync_job(tmp_db_path, tmp_path):
+    conn = get_connection(tmp_db_path)
+    run_migrations(conn, MIGRATIONS_DIR)
+    create_project(conn, "Nexy")
+    conn.close()
+
+    backup_dir = tmp_path / "backups"
+    scheduler = build_scheduler(tmp_db_path, backup_dir, include_unipile=False)
+
+    job_names = [job.name for job in scheduler._jobs]
+
+    assert "mail_sync" in job_names
+
+
+def test_mail_sync_job_does_not_crash_the_scheduler_when_codex_is_unavailable(tmp_db_path, tmp_path):
+    conn = get_connection(tmp_db_path)
+    run_migrations(conn, MIGRATIONS_DIR)
+    create_project(conn, "Nexy")
+    conn.close()
+
+    backup_dir = tmp_path / "backups"
+    scheduler = build_scheduler(
+        tmp_db_path, backup_dir, include_unipile=False,
+        codex_path="definitely-not-a-real-codex-binary",
+    )
+
+    # Codex isn't actually installed under this fake name, so the job
+    # should fail internally and be caught — run_pending must not raise,
+    # and the other jobs must still run.
+    ran = scheduler.run_pending(now=0.0)
+
+    assert "backup" in ran
+    assert "pipeline_consistency" in ran

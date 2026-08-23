@@ -20,7 +20,12 @@ DB_PATH = str(Path.home() / "ProjectOS" / "data" / "project_os.sqlite")
 BACKUP_DIR = Path.home() / "ProjectOS" / "data" / "backups"
 
 
-def build_scheduler(db_path: str, backup_dir: Path, include_unipile: bool = True) -> Scheduler:
+def build_scheduler(
+    db_path: str,
+    backup_dir: Path,
+    include_unipile: bool = True,
+    codex_path: str = "codex",
+) -> Scheduler:
     scheduler = Scheduler()
 
     def _backup_job() -> None:
@@ -46,10 +51,36 @@ def build_scheduler(db_path: str, backup_dir: Path, include_unipile: bool = True
             sync_linkedin_states(conn, client, project["id"])
         conn.close()
 
+    def _mail_sync_job() -> None:
+        from project_os.ai.codex_provider import CodexProvider
+        from project_os.ai.mail_read_mcp_server import mcp_server_command
+        from project_os.ai.mail_sync import sync_mail_replies
+
+        conn = get_connection(db_path)
+        for project in list_projects(conn):
+            try:
+                provider = CodexProvider.for_codex_cli(
+                    codex_path=codex_path,
+                    mcp_servers={"project-os-mail": mcp_server_command()},
+                )
+            except Exception:
+                logger.exception(
+                    "mail sync: failed to start Codex for project %r; skipping", project["id"]
+                )
+                continue
+            try:
+                sync_mail_replies(conn, provider, project["id"])
+            except Exception:
+                logger.exception("mail sync failed for project %r", project["id"])
+            finally:
+                provider.close()
+        conn.close()
+
     scheduler.register("backup", interval_seconds=24 * 60 * 60, func=_backup_job)
     scheduler.register("pipeline_consistency", interval_seconds=15 * 60, func=_consistency_job)
     if include_unipile:
         scheduler.register("unipile_sync", interval_seconds=15 * 60, func=_unipile_sync_job)
+    scheduler.register("mail_sync", interval_seconds=15 * 60, func=_mail_sync_job)
     return scheduler
 
 
