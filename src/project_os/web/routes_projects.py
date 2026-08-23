@@ -1,12 +1,24 @@
 from fastapi import APIRouter, Request, HTTPException
 
 from project_os.db import get_connection
-from project_os.repositories.projects import get_project
+from project_os.repositories.projects import get_project, list_projects
 from project_os.repositories.actions import list_open_actions
 
 router = APIRouter()
 
 _HIGH_PRIORITY = {"P0", "P1"}
+
+
+@router.get("/projects")
+def projects_index(request: Request):
+    conn = get_connection(request.app.state.db_path)
+    try:
+        projects = list_projects(conn)
+    finally:
+        conn.close()
+    return request.app.state.templates.TemplateResponse(
+        request, "projects_index.html", {"projects": projects}
+    )
 
 
 @router.get("/projects/{project_id}")
