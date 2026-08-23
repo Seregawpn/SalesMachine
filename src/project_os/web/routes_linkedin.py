@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Form
+from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import RedirectResponse
 
 from project_os.db import get_connection
@@ -22,6 +22,10 @@ def linkedin_queue(request: Request, project_id: int):
 @router.post("/projects/{project_id}/linkedin/{project_contact_id}/state")
 def update_linkedin_state(request: Request, project_id: int, project_contact_id: int, state: str = Form(...)):
     conn = get_connection(request.app.state.db_path)
-    set_linkedin_state(conn, project_contact_id, state, actor="user")
+    try:
+        set_linkedin_state(conn, project_contact_id, state, actor="user")
+    except ValueError as e:
+        conn.close()
+        raise HTTPException(status_code=400, detail=str(e))
     conn.close()
     return RedirectResponse(url=f"/projects/{project_id}/linkedin", status_code=303)

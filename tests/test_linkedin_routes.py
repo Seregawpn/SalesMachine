@@ -48,3 +48,43 @@ def test_confirming_connection_sent_moves_contact_to_pending(tmp_db_path):
         "SELECT linkedin_state FROM project_contacts WHERE id = ?", (pc_id,)
     ).fetchone()
     assert row["linkedin_state"] == "Pending Connection"
+
+
+def test_confirming_connection_sent_moves_contact_out_of_to_connect(tmp_db_path):
+    client, project_id, pc_id = _client(tmp_db_path)
+
+    client.post(
+        f"/projects/{project_id}/linkedin/{pc_id}/state",
+        data={"state": "Pending Connection"},
+        follow_redirects=True,
+    )
+
+    response = client.get(f"/projects/{project_id}/linkedin")
+
+    assert response.status_code == 200
+    assert "Nothing to connect with right now." in response.text
+    assert "Jane Smith" in response.text  # now shown in pending section
+
+
+def test_invalid_state_returns_400(tmp_db_path):
+    client, project_id, pc_id = _client(tmp_db_path)
+
+    response = client.post(
+        f"/projects/{project_id}/linkedin/{pc_id}/state",
+        data={"state": "Bogus State"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 400
+
+
+def test_missing_project_contact_returns_400(tmp_db_path):
+    client, project_id, pc_id = _client(tmp_db_path)
+
+    response = client.post(
+        f"/projects/{project_id}/linkedin/999999/state",
+        data={"state": "Pending Connection"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 400
