@@ -84,22 +84,24 @@ function run(argv) {
       if (scanned >= maxScan) break;
     }
   } else if (mode === "unread") {
-    // Filtering via .whose() pushes the readStatus check into Mail.app's
-    // own query engine instead of fetching message.readStatus() one at a
-    // time from JXA - the per-message property fetch is slow enough on a
-    // large or IMAP-backed mailbox (confirmed live: this loop's original
-    // one-by-one boolValue(() => message.readStatus()) form timed out
-    // after 20s on a ~5,400-message inbox, while the .whose() form here
-    // returns promptly) that a maxScan cap wasn't a sufficient mitigation.
-    let unreadMatches = [];
-    try {
-      unreadMatches = Mail.inbox.messages.whose({ readStatus: false })();
-    } catch (_) {
-      unreadMatches = [];
-    }
-    scanned = unreadMatches.length;
-    for (let i = 0; i < unreadMatches.length && selected.length < limit; i++) {
-      selected.push(messageRecord(unreadMatches[i], false));
+    // A plain bounded loop, not Mail.inbox.messages.whose({readStatus: false})():
+    // .whose() forces Mail to evaluate the predicate against the entire
+    // inbox before returning anything, which hangs on a large or
+    // IMAP-backed mailbox even when Mail itself is healthy (confirmed
+    // live against a ~5,400-message "All Mail"-mapped inbox: .whose()
+    // timed out repeatedly while a bounded loop over just the first
+    // maxScan messages - mirroring "recent" mode, which is reliably fast
+    // - returned promptly). This can miss an unread message older than
+    // the first maxScan messages in the mailbox's natural order, which is
+    // an acceptable tradeoff: callers only need recent, sales-relevant
+    // replies, not exhaustive history.
+    for (const message of inboxMessages) {
+      scanned += 1;
+      if (boolValue(() => message.readStatus(), false) === false) {
+        selected.push(messageRecord(message, false));
+        if (selected.length >= limit) break;
+      }
+      if (scanned >= maxScan) break;
     }
   } else if (mode === "search") {
     const query = String(request.query || "");
@@ -155,14 +157,13 @@ def _run_mail_jxa(
         check=False,
         capture_output=True,
         text=True,
-        # 60s, not 20s: a readStatus-based query (list_unread_messages) can
-        # be slow on a large or IMAP-backed mailbox - confirmed live against
-        # a ~5,400-message "All Mail"-mapped inbox, where both a manual
-        # per-message scan and a native .whose({readStatus: false}) filter
-        # each took longer than 20s. This runs as a background daemon job
+        # 60s, not 20s: Mail.app can be intermittently slow to answer any
+        # Apple Event at all while busy with its own background sync/
+        # indexing (confirmed live), independent of query shape - the
+        # bounded-scan queries (unread/search/read) stay well under this
+        # in the common case, but this runs as a background daemon job
         # every 15 minutes, not something a user waits on synchronously, so
-        # a slower worst case here is an acceptable tradeoff for not
-        # failing outright on accounts like this one.
+        # a generous worst-case timeout is an acceptable tradeoff.
         timeout=60,
     )
     if result.returncode != 0:
@@ -292,7 +293,11 @@ def handle_request(
         if not isinstance(arguments, dict):
             arguments = {}
         if name == "list_unread_messages":
-            result = _mail_tool_result({"mode": "unread", "limit": _clamp_limit(arguments)}, runner=runner)
+            limit = _clamp_limit(arguments)
+            result = _mail_tool_result(
+                {"mode": "unread", "limit": limit, "max_scan": _bounded_scan(limit)},
+                runner=runner,
+            )
         elif name == "list_recent_messages":
             result = _mail_tool_result({"mode": "recent", "limit": _clamp_limit(arguments)}, runner=runner)
         elif name == "search_messages":

@@ -100,6 +100,20 @@ def test_unknown_method_returns_json_rpc_error():
     assert response["error"]["code"] == -32601
 
 
+def test_list_unread_messages_requests_a_bounded_scan():
+    captured = {}
+
+    def runner(*args, **kwargs):
+        captured["payload"] = json.loads(args[0][-1])
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout=json.dumps({"messages": [], "scanned": 0}), stderr="")
+
+    handle_request(
+        {"id": 11, "method": "tools/call", "params": {"name": "list_unread_messages", "arguments": {}}},
+        runner=runner,
+    )
+    assert captured["payload"]["max_scan"] == 250
+
+
 def test_read_message_requests_a_generous_max_scan():
     captured = {}
 
