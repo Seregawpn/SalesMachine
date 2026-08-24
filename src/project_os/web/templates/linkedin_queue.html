@@ -4,8 +4,8 @@
 <h2>LinkedIn</h2>
 
 <div class="board">
-  <div class="board-col">
-    <div class="board-col-header">To connect</div>
+  <section class="board-col" aria-labelledby="to-connect-heading">
+    <h3 class="board-col-header" id="to-connect-heading">To connect</h3>
     {% for row in queue["to_connect"] %}
     <div class="li-row" id="li-row-{{ row['id'] }}">
       <div class="li-row-name">{{ row["name"] }}</div>
@@ -21,10 +21,10 @@
     {% else %}
     <div class="board-empty">Nothing to connect with right now.</div>
     {% endfor %}
-  </div>
+  </section>
 
-  <div class="board-col">
-    <div class="board-col-header">Pending connections to re-check</div>
+  <section class="board-col" aria-labelledby="pending-recheck-heading">
+    <h3 class="board-col-header" id="pending-recheck-heading">Pending connections to re-check</h3>
     {% for row in queue["pending_recheck"] %}
     <div class="li-row" id="li-row-{{ row['id'] }}">
       <div class="li-row-name">{{ row["name"] }}</div>
@@ -46,10 +46,10 @@
     {% else %}
     <div class="board-empty">Nothing pending.</div>
     {% endfor %}
-  </div>
+  </section>
 
-  <div class="board-col">
-    <div class="board-col-header">Accepted connections awaiting a message</div>
+  <section class="board-col" aria-labelledby="awaiting-message-heading">
+    <h3 class="board-col-header" id="awaiting-message-heading">Accepted connections awaiting a message</h3>
     {% for row in queue["awaiting_message"] %}
     <div class="li-row" id="li-row-{{ row['id'] }}">
       <div class="li-row-name">{{ row["name"] }}</div>
@@ -65,10 +65,10 @@
     {% else %}
     <div class="board-empty">Nobody waiting on a message.</div>
     {% endfor %}
-  </div>
+  </section>
 
-  <div class="board-col">
-    <div class="board-col-header">Conversations awaiting reply</div>
+  <section class="board-col" aria-labelledby="awaiting-reply-heading">
+    <h3 class="board-col-header" id="awaiting-reply-heading">Conversations awaiting reply</h3>
     {% for row in queue["awaiting_reply"] %}
     <div class="li-row" id="li-row-{{ row['id'] }}">
       <div class="li-row-name">{{ row["name"] }}</div>
@@ -84,6 +84,6 @@
     {% else %}
     <div class="board-empty">No open conversations.</div>
     {% endfor %}
-  </div>
+  </section>
 </div>
 {% endblock %}

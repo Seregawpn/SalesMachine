@@ -140,22 +140,23 @@ def import_row(conn, project_id: int, row: dict) -> None:
             organization_id=organization_id,
         )
 
-    if row_type in {"B2B", "Partner"} and get_opportunity_for_contact(conn, project_id, contact_id) is None:
+    if row_type in {"B2B", "Partner"}:
         stage, note = opportunity_stage(row.get("Stage"))
-        blocker = truncate(row.get("Response / Context"), 400)
-        if note:
-            blocker = f"{note}. {blocker}" if blocker else note
-        create_opportunity(
-            conn,
-            project_id,
-            contact_id=contact_id,
-            organization_id=organization_id,
-            stage=stage,
-            offer=clean(row.get("Subcategory")),
-            blocker=blocker,
-            next_action=clean(row.get("Next Step")),
-            next_action_due=parse_iso_date(row.get("Follow-up Date")),
-        )
+        if stage != "Research" and get_opportunity_for_contact(conn, project_id, contact_id) is None:
+            blocker = truncate(row.get("Response / Context"), 400)
+            if note:
+                blocker = f"{note}. {blocker}" if blocker else note
+            create_opportunity(
+                conn,
+                project_id,
+                contact_id=contact_id,
+                organization_id=organization_id,
+                stage=stage,
+                offer=clean(row.get("Subcategory")),
+                blocker=blocker,
+                next_action=clean(row.get("Next Step")),
+                next_action_due=parse_iso_date(row.get("Follow-up Date")),
+            )
 
     interaction_date = parse_iso_date(row.get("Last Communication"))
     if interaction_date:

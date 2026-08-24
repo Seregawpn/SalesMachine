@@ -29,13 +29,16 @@ def test_import_creates_organizations_contacts_opportunities_and_interactions(se
     # Jane Smith, John Doe, Sam Tester, Alex Unclear = 4
     # ("Jane Smith Again" shares jane@example.org with Jane Smith -> same contact)
     assert summary["contacts"] == 4
-    # Jane Smith, John Doe, Alex Unclear = 3 opportunities.
-    # "Jane Smith Again" (Duplicate Email Org) shares jane@example.org with Jane Smith, so it
-    # resolves to the same contact_id; get_opportunity_for_contact is scoped by (project_id,
-    # contact_id) only (not organization_id), so it finds Jane's existing opportunity from row 1
-    # and does not create a second one -> no extra opportunity for that row.
+    # Jane Smith (Stage=Follow-up -> Contacted) and Alex Unclear (Stage=Follow-up -> Contacted) = 2
+    # opportunities. John Doe (Stage=Research -> Research) is now skipped: import_row does not
+    # create an opportunities row for Research-stage rows, since an unresearched prospect is not
+    # yet a real pipeline deal and legitimately has no next action.
+    # "Jane Smith Again" (Duplicate Email Org, Stage=Research) shares jane@example.org with Jane
+    # Smith, so it resolves to the same contact_id and would be skipped either way (both because
+    # its own stage is Research, and because get_opportunity_for_contact already finds Jane's
+    # existing opportunity from row 1).
     # Research Only Org has no named contact -> no opportunity; Sam Tester is B2C -> no opportunity
-    assert summary["opportunities"] == 3
+    assert summary["opportunities"] == 2
     # Only rows with a valid YYYY-MM-DD Last Communication: Jane Smith row + Sam Tester row = 2
     assert summary["interactions"] == 2
 
