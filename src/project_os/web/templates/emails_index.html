@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Emails — Project OS{% endblock %}
+{% block content %}
+<p id="flash-banner" role="alert" class="flash-error"{% if not error %} hidden{% endif %}>{{ error or "" }}</p>
+<h2>Emails</h2>
+{% if interactions %}
+<div style="display: grid; grid-template-columns: minmax(280px, 340px) 1fr; gap: 16px; align-items: start;">
+  <div class="table-card">
+    <div class="feed">
+      {% for i in interactions %}
+      <a href="/emails/{{ i['id'] }}" style="display: block; text-decoration: none; color: inherit;">
+        <div class="feed-row"{% if selected and i['id'] == selected['id'] %} style="background: var(--row-alt-bg);"{% endif %}>
+          <div class="feed-meta">
+            <span class="tag">{{ i["direction"] }}</span>
+            <span>{{ i["contact_name"] }}</span>
+            <span style="margin-left: auto;">{{ i["created_at"] }}</span>
+          </div>
+          <div class="feed-line">{{ i["subject"] or "Unknown" }}</div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="table-card" id="email-detail">
+    {% include "_email_detail.html" %}
+  </div>
+</div>
+{% else %}
+<p>No emails yet.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,31 @@
+{% if selected %}
+<div style="padding: 20px;">
+  <div style="font-size: 20px; margin-bottom: 6px;">{{ selected["subject"] or "Unknown" }}</div>
+  <div class="feed-meta" style="margin-bottom: 14px;">
+    <span class="tag">{{ selected["direction"] }}</span>
+    <span>{{ selected["contact_name"] }}</span>
+    <span>{{ selected["project_name"] }}</span>
+    <span style="margin-left: auto;">{{ selected["created_at"] }}</span>
+  </div>
+  {% if selected["ai_summary"] %}
+  <div style="border-left: 2px solid var(--accent); padding: 2px 0 2px 14px; margin-bottom: 18px; color: var(--text-secondary);">
+    <div class="tag" style="margin-bottom: 6px;">AI summary</div>
+    <div>{{ selected["ai_summary"] }}</div>
+  </div>
+  {% endif %}
+  {% if selected["open_action_id"] %}
+  <form method="post" action="/actions/{{ selected['open_action_id'] }}/send"
+        hx-post="/actions/{{ selected['open_action_id'] }}/send"
+        hx-target="#email-detail" hx-swap="innerHTML">
+    <input type="hidden" name="view" value="emails">
+    <label for="message-{{ selected['id'] }}" class="sr-only">Reply text</label>
+    <textarea id="message-{{ selected['id'] }}" name="message" rows="8" required style="width: 100%;">{{ selected["draft_reply"] }}</textarea>
+    <button type="submit">Approve &amp; Send</button>
+  </form>
+  {% else %}
+  <p style="color: var(--text-muted);">No action needed.</p>
+  {% endif %}
+</div>
+{% else %}
+<p style="padding: 20px; color: var(--text-muted);">No email selected.</p>
+{% endif %}
