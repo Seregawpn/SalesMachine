@@ -369,3 +369,63 @@ def test_sending_a_reply_via_hx_request_resets_the_flash_banner_on_success(tmp_d
     assert 'id="flash-banner"' in response.text
     assert 'hx-swap-oob="true"' in response.text
     assert "hidden" in response.text
+
+
+def test_sending_a_reply_with_view_emails_redirects_to_the_email_on_success(tmp_db_path, monkeypatch):
+    client, project_id, action_id = _client_with_reply_action(tmp_db_path)
+    conn = get_connection(tmp_db_path)
+    interaction_id = conn.execute(
+        "SELECT source_interaction_id FROM actions WHERE id = ?", (action_id,)
+    ).fetchone()["source_interaction_id"]
+    conn.close()
+
+    def fake_send_via_jxa(payload):
+        return None
+
+    monkeypatch.setattr("project_os.web.routes_action_center.send_via_jxa", fake_send_via_jxa)
+
+    response = client.post(
+        f"/actions/{action_id}/send",
+        data={"message": "Here is our pricing.", "view": "emails"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/emails/{interaction_id}"
+
+
+def test_sending_a_reply_with_view_emails_via_hx_returns_the_detail_partial(tmp_db_path, monkeypatch):
+    client, project_id, action_id = _client_with_reply_action(tmp_db_path)
+
+    def fake_send_via_jxa(payload):
+        return None
+
+    monkeypatch.setattr("project_os.web.routes_action_center.send_via_jxa", fake_send_via_jxa)
+
+    response = client.post(
+        f"/actions/{action_id}/send",
+        data={"message": "Here is our pricing.", "view": "emails"},
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert "<html" not in response.text
+    assert "No action needed." in response.text
+
+
+def test_sending_a_reply_without_view_field_still_redirects_to_action_center(tmp_db_path, monkeypatch):
+    client, project_id, action_id = _client_with_reply_action(tmp_db_path)
+
+    def fake_send_via_jxa(payload):
+        return None
+
+    monkeypatch.setattr("project_os.web.routes_action_center.send_via_jxa", fake_send_via_jxa)
+
+    response = client.post(
+        f"/actions/{action_id}/send",
+        data={"message": "Here is our pricing."},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/action-center"

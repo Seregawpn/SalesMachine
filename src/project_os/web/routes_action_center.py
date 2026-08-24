@@ -7,6 +7,7 @@ from project_os.db import get_connection
 from project_os.repositories.actions import list_open_actions, complete_action, snooze_action, get_reply_context
 from project_os.repositories.interactions import create_interaction
 from project_os.ai.mail_send_mcp_server import send_via_jxa, MailSendError
+from project_os.web.routes_emails import render_email_detail
 
 router = APIRouter()
 
@@ -77,13 +78,19 @@ def snooze(request: Request, action_id: int, new_due_date: str = Form(...)):
 
 
 @router.post("/actions/{action_id}/send")
-def send_reply(request: Request, action_id: int, message: str = Form(...)):
+def send_reply(request: Request, action_id: int, message: str = Form(...), view: str | None = Form(None)):
     conn = get_connection(request.app.state.db_path)
     is_hx = _is_hx(request)
+    from_emails = view == "emails"
     try:
         context = get_reply_context(conn, action_id)
         if context is None:
             raise HTTPException(status_code=404, detail=f"No sendable reply for action {action_id}")
+
+        action_row = conn.execute(
+            "SELECT project_id, linked_id, source_interaction_id FROM actions WHERE id = ?", (action_id,)
+        ).fetchone()
+        redirect_url = f"/emails/{action_row['source_interaction_id']}" if from_emails else "/action-center"
 
         if not message.strip():
             if is_hx:
@@ -91,12 +98,8 @@ def send_reply(request: Request, action_id: int, message: str = Form(...)):
                 response.headers["HX-Reswap"] = "none"
                 return response
             return RedirectResponse(
-                url="/action-center?error=Reply text cannot be empty.", status_code=303
+                url=f"{redirect_url}?error=Reply text cannot be empty.", status_code=303
             )
-
-        action_row = conn.execute(
-            "SELECT project_id, linked_id FROM actions WHERE id = ?", (action_id,)
-        ).fetchone()
 
         try:
             send_via_jxa({"to": context["to"], "subject": context["subject"], "body": message})
@@ -106,7 +109,7 @@ def send_reply(request: Request, action_id: int, message: str = Form(...)):
                 response.headers["HX-Reswap"] = "none"
                 return response
             return RedirectResponse(
-                url=f"/action-center?error={quote(str(error))}", status_code=303
+                url=f"{redirect_url}?error={quote(str(error))}", status_code=303
             )
 
         conn.execute("BEGIN")
@@ -123,7 +126,9 @@ def send_reply(request: Request, action_id: int, message: str = Form(...)):
             raise
 
         if is_hx:
+            if from_emails:
+                return HTMLResponse(render_email_detail(request, conn, action_row["source_interaction_id"]))
             return HTMLResponse(_BANNER_RESET)
     finally:
         conn.close()
-    return RedirectResponse(url="/action-center", status_code=303)
+    return RedirectResponse(url=redirect_url, status_code=303)
