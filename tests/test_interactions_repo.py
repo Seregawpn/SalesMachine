@@ -3,7 +3,8 @@ from pathlib import Path
 from project_os.db import get_connection, run_migrations
 from project_os.repositories.projects import create_project
 from project_os.repositories.contacts import create_contact
-from project_os.repositories.interactions import create_interaction, get_interaction_by_external_id, list_interactions, interaction_exists
+from project_os.repositories.interactions import create_interaction, get_interaction_by_external_id, list_interactions, interaction_exists, list_email_interactions
+from project_os.repositories.actions import create_action, complete_action
 
 MIGRATIONS_DIR = Path(__file__).parent.parent / "src" / "project_os" / "migrations"
 
@@ -136,3 +137,70 @@ def test_interaction_exists_detects_duplicates(tmp_db_path):
 
     assert interaction_exists(conn, contact_id, "Intro", "2026-08-10 00:00:00") is True
     assert interaction_exists(conn, contact_id, "Different subject", "2026-08-10 00:00:00") is False
+
+
+def test_list_email_interactions_filters_to_email_channel_only(tmp_db_path):
+    conn, project_id, contact_id = _setup(tmp_db_path)
+    email_id = create_interaction(
+        conn, project_id, contact_id,
+        channel="email", direction="inbound", subject="Pricing question",
+        ai_summary="Wants pricing.", intent="question", external_message_id="msg-1",
+    )
+    create_interaction(
+        conn, project_id, contact_id,
+        channel="linkedin", direction="inbound", subject=None,
+        ai_summary=None, intent=None, external_message_id=None,
+    )
+
+    rows = list_email_interactions(conn)
+
+    assert len(rows) == 1
+    assert rows[0]["id"] == email_id
+    assert rows[0]["contact_name"] == "Jane Smith"
+    assert rows[0]["project_name"] == "Nexy"
+
+
+def test_list_email_interactions_reports_open_action_and_draft(tmp_db_path):
+    conn, project_id, contact_id = _setup(tmp_db_path)
+    interaction_id = create_interaction(
+        conn, project_id, contact_id,
+        channel="email", direction="inbound", subject="Pricing question",
+        ai_summary="Wants pricing.", intent="question", external_message_id="msg-1",
+    )
+    action_id = create_action(
+        conn, project_id, module="Sales", reason="Reply with pricing",
+        linked_table="contacts", linked_id=contact_id,
+        suggested_message="Here is our pricing.",
+        source_interaction_id=interaction_id,
+    )
+
+    rows = list_email_interactions(conn)
+
+    assert rows[0]["open_action_id"] == action_id
+    assert rows[0]["draft_reply"] == "Here is our pricing."
+
+    complete_action(conn, action_id)
+    rows_after = list_email_interactions(conn)
+
+    assert rows_after[0]["open_action_id"] is None
+    assert rows_after[0]["draft_reply"] is None
+
+
+def test_list_email_interactions_orders_most_recent_first(tmp_db_path):
+    conn, project_id, contact_id = _setup(tmp_db_path)
+    older = create_interaction(
+        conn, project_id, contact_id,
+        channel="email", direction="inbound", subject="First",
+        ai_summary=None, intent=None, external_message_id=None,
+        created_at="2026-08-01 00:00:00",
+    )
+    newer = create_interaction(
+        conn, project_id, contact_id,
+        channel="email", direction="outbound", subject="Second",
+        ai_summary=None, intent=None, external_message_id=None,
+        created_at="2026-08-10 00:00:00",
+    )
+
+    rows = list_email_interactions(conn)
+
+    assert [r["id"] for r in rows] == [newer, older]

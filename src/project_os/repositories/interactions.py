@@ -67,3 +67,18 @@ def list_interactions(conn: sqlite3.Connection, limit: int = 50) -> list[sqlite3
         """,
         (limit,),
     ).fetchall()
+
+
+def list_email_interactions(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT i.*, c.name AS contact_name, p.name AS project_name,
+               a.id AS open_action_id, a.suggested_message AS draft_reply
+        FROM interactions i
+        JOIN contacts c ON c.id = i.contact_id
+        JOIN projects p ON p.id = i.project_id
+        LEFT JOIN actions a ON a.source_interaction_id = i.id AND a.status = 'Open'
+        WHERE i.channel = 'email'
+        ORDER BY i.created_at DESC, i.id DESC
+        """
+    ).fetchall()
