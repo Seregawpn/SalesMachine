@@ -411,6 +411,14 @@ def test_sending_a_reply_with_view_emails_via_hx_returns_the_detail_partial(tmp_
     assert response.status_code == 200
     assert "<html" not in response.text
     assert "No action needed." in response.text
+    # Pin down which interaction is actually shown: the original inbound
+    # email (subject "Pricing question"), not the brand-new outbound reply
+    # (subject "Re: Pricing question") that send_reply just created. Both
+    # rows would satisfy "No action needed." alone, so that assertion
+    # can't tell correct behavior from a regression that fell back to
+    # rendering the newest/first row.
+    assert "Pricing question" in response.text
+    assert "Re: Pricing question" not in response.text
 
 
 def test_sending_a_reply_without_view_field_still_redirects_to_action_center(tmp_db_path, monkeypatch):
