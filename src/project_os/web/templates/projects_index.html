@@ -2,11 +2,16 @@
 {% block title %}Projects — Project OS{% endblock %}
 {% block content %}
 <h2>Projects</h2>
-<ul>
+{% if projects %}
+<div class="card-list">
   {% for project in projects %}
-  <li><a href="/projects/{{ project['id'] }}">{{ project["name"] }}</a></li>
-  {% else %}
-  <li>No projects yet.</li>
+  <a class="project-card" href="/projects/{{ project['id'] }}">
+    <div class="name">{{ project["name"] }}</div>
+    {% if project["description"] %}<p>{{ project["description"] }}</p>{% endif %}
+  </a>
   {% endfor %}
-</ul>
+</div>
+{% else %}
+<p>No projects yet.</p>
+{% endif %}
 {% endblock %}
