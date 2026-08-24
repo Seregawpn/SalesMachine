@@ -205,3 +205,29 @@ input, select, textarea { font: inherit; border: 1px solid var(--border); border
 .skip-link { position: absolute; left: -9999px; }
 .skip-link:focus { left: 8px; top: 8px; background: #fff; padding: 6px 10px; border-radius: 4px; z-index: 10; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+.topbar-chrome { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.topbar-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 10px;
+  width: 220px;
+  background: var(--row-alt-bg);
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.topbar-bell {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
