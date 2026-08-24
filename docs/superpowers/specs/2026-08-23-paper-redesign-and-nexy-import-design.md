@@ -32,6 +32,8 @@ Change: `GET /contacts` groups by organization. New repository query `list_compa
 
 Expand/collapse uses `<details>/<summary>` per company row — zero JS, keeps the progressive-enhancement approach already used for htmx (this works with or without JS/htmx present).
 
+**Correction during implementation:** the schema had no direct contact-to-organization link (`project_contacts` and `project_organizations` were both project-scoped but not linked to each other). Migration `0005_project_contacts_org_role.sql` adds `project_contacts.organization_id` (nullable FK to `organizations`) alongside `role`, so a project-scoped contact can record which company it belongs to. Contacts with `organization_id IS NULL` (including all B2C individuals) fall into the synthetic "Individuals" bucket.
+
 ## Part 2 — Nexy Data Import
 
 **Source:** `data/imports/nexy_outreach.csv` (gitignored — real names/emails, not committed), a snapshot export of the Google Sheet. One-time/idempotent script, not a live sync.
