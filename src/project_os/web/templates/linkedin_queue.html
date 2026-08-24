@@ -3,105 +3,87 @@
 {% block content %}
 <h2>LinkedIn</h2>
 
-<section aria-labelledby="to-connect-heading">
-  <h3 id="to-connect-heading">To connect</h3>
-  <table>
-    <thead><tr><th scope="col">Name</th><th scope="col">Action</th></tr></thead>
-    <tbody>
-      {% for row in queue["to_connect"] %}
-      <tr>
-        <td>{{ row["name"] }}</td>
-        <td>
-          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
-                hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
-                hx-target="closest tr" hx-swap="outerHTML swap:0.2s">
-            <input type="hidden" name="state" value="Pending Connection">
-            <button type="submit">Connection sent</button>
-          </form>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="2">Nothing to connect with right now.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
+<div class="board">
+  <div class="board-col">
+    <div class="board-col-header">To connect</div>
+    {% for row in queue["to_connect"] %}
+    <div class="li-row" id="li-row-{{ row['id'] }}">
+      <div class="li-row-name">{{ row["name"] }}</div>
+      <div class="li-row-actions">
+        <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+              hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+              hx-target="#li-row-{{ row['id'] }}" hx-swap="outerHTML swap:0.2s">
+          <input type="hidden" name="state" value="Pending Connection">
+          <button type="submit">Connection sent</button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div class="board-empty">Nothing to connect with right now.</div>
+    {% endfor %}
+  </div>
 
-<section aria-labelledby="pending-heading">
-  <h3 id="pending-heading">Pending connections to re-check</h3>
-  <table>
-    <thead><tr><th scope="col">Name</th><th scope="col">Action</th></tr></thead>
-    <tbody>
-      {% for row in queue["pending_recheck"] %}
-      <tr>
-        <td>{{ row["name"] }}</td>
-        <td>
-          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
-                hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
-                hx-target="closest tr" hx-swap="outerHTML swap:0.2s">
-            <input type="hidden" name="state" value="Accepted">
-            <button type="submit">Accepted</button>
-          </form>
-          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
-                hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
-                hx-target="closest tr" hx-swap="outerHTML swap:0.2s">
-            <input type="hidden" name="state" value="Not relevant">
-            <button type="submit">Not relevant</button>
-          </form>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="2">Nothing pending.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
+  <div class="board-col">
+    <div class="board-col-header">Pending connections to re-check</div>
+    {% for row in queue["pending_recheck"] %}
+    <div class="li-row" id="li-row-{{ row['id'] }}">
+      <div class="li-row-name">{{ row["name"] }}</div>
+      <div class="li-row-actions">
+        <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+              hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+              hx-target="#li-row-{{ row['id'] }}" hx-swap="outerHTML swap:0.2s">
+          <input type="hidden" name="state" value="Accepted">
+          <button type="submit">Accepted</button>
+        </form>
+        <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+              hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+              hx-target="#li-row-{{ row['id'] }}" hx-swap="outerHTML swap:0.2s">
+          <input type="hidden" name="state" value="Not relevant">
+          <button type="submit">Not relevant</button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div class="board-empty">Nothing pending.</div>
+    {% endfor %}
+  </div>
 
-<section aria-labelledby="awaiting-message-heading">
-  <h3 id="awaiting-message-heading">Accepted connections awaiting a message</h3>
-  <table>
-    <thead><tr><th scope="col">Name</th><th scope="col">Action</th></tr></thead>
-    <tbody>
-      {% for row in queue["awaiting_message"] %}
-      <tr>
-        <td>{{ row["name"] }}</td>
-        <td>
-          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
-                hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
-                hx-target="closest tr" hx-swap="outerHTML swap:0.2s">
-            <input type="hidden" name="state" value="Message Sent">
-            <button type="submit">Message sent</button>
-          </form>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="2">Nobody waiting on a message.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
+  <div class="board-col">
+    <div class="board-col-header">Accepted connections awaiting a message</div>
+    {% for row in queue["awaiting_message"] %}
+    <div class="li-row" id="li-row-{{ row['id'] }}">
+      <div class="li-row-name">{{ row["name"] }}</div>
+      <div class="li-row-actions">
+        <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+              hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+              hx-target="#li-row-{{ row['id'] }}" hx-swap="outerHTML swap:0.2s">
+          <input type="hidden" name="state" value="Message Sent">
+          <button type="submit">Message sent</button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div class="board-empty">Nobody waiting on a message.</div>
+    {% endfor %}
+  </div>
 
-<section aria-labelledby="awaiting-reply-heading">
-  <h3 id="awaiting-reply-heading">Conversations awaiting reply</h3>
-  <table>
-    <thead><tr><th scope="col">Name</th><th scope="col">Action</th></tr></thead>
-    <tbody>
-      {% for row in queue["awaiting_reply"] %}
-      <tr>
-        <td>{{ row["name"] }}</td>
-        <td>
-          <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
-                hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
-                hx-target="closest tr" hx-swap="outerHTML swap:0.2s">
-            <input type="hidden" name="state" value="Replied">
-            <button type="submit">Replied</button>
-          </form>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="2">No open conversations.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
+  <div class="board-col">
+    <div class="board-col-header">Conversations awaiting reply</div>
+    {% for row in queue["awaiting_reply"] %}
+    <div class="li-row" id="li-row-{{ row['id'] }}">
+      <div class="li-row-name">{{ row["name"] }}</div>
+      <div class="li-row-actions">
+        <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+              hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
+              hx-target="#li-row-{{ row['id'] }}" hx-swap="outerHTML swap:0.2s">
+          <input type="hidden" name="state" value="Replied">
+          <button type="submit">Replied</button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div class="board-empty">No open conversations.</div>
+    {% endfor %}
+  </div>
+</div>
 {% endblock %}
