@@ -150,8 +150,26 @@ def list_companies_with_contacts(conn: sqlite3.Connection) -> list[dict]:
             """,
             (org["id"],),
         ).fetchall()
+        open_opportunities = conn.execute(
+            "SELECT COUNT(*) FROM opportunities WHERE organization_id = ? AND stage != 'Closed'",
+            (org["id"],),
+        ).fetchone()[0]
+        activity = conn.execute(
+            """
+            SELECT i.*, c.name AS contact_name
+            FROM interactions i
+            JOIN contacts c ON c.id = i.contact_id
+            JOIN project_contacts pc ON pc.contact_id = c.id AND pc.organization_id = ?
+            ORDER BY i.created_at DESC, i.id DESC
+            LIMIT 5
+            """,
+            (org["id"],),
+        ).fetchall()
         companies.append(
-            {"id": org["id"], "name": org["name"], "website": org["website"], "people": people}
+            {
+                "id": org["id"], "name": org["name"], "website": org["website"], "people": people,
+                "open_opportunities": open_opportunities, "activity": activity,
+            }
         )
 
     individuals = conn.execute(

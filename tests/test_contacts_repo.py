@@ -16,6 +16,8 @@ from project_os.repositories.contacts import (
     get_contact_by_email,
     list_contacts,
 )
+from project_os.repositories.opportunities import create_opportunity
+from project_os.repositories.interactions import create_interaction
 
 MIGRATIONS_DIR = Path(__file__).parent.parent / "src" / "project_os" / "migrations"
 
@@ -183,3 +185,67 @@ def test_list_companies_with_contacts_is_empty_when_no_contacts(tmp_db_path):
     conn = _conn(tmp_db_path)
 
     assert list_companies_with_contacts(conn) == []
+
+
+def test_list_companies_with_contacts_includes_open_opportunities_and_activity(tmp_db_path):
+    conn = _conn(tmp_db_path)
+    project_id = create_project(conn, "Nexy")
+    org_id = create_organization(conn, "Example Org")
+    contact_id = create_contact(conn, "Jane Smith", email="jane@example.org")
+    link_contact_to_project(conn, project_id, contact_id, organization_id=org_id)
+
+    create_opportunity(conn, project_id, contact_id=contact_id, organization_id=org_id, stage="Contacted")
+    create_opportunity(conn, project_id, contact_id=contact_id, organization_id=org_id, stage="Closed")
+    create_interaction(
+        conn, project_id, contact_id,
+        channel="email", direction="inbound", subject="Pricing question",
+        ai_summary=None, intent=None, external_message_id=None,
+        created_at="2026-08-10 00:00:00",
+    )
+    create_interaction(
+        conn, project_id, contact_id,
+        channel="email", direction="outbound", subject="Re: Pricing question",
+        ai_summary=None, intent=None, external_message_id=None,
+        created_at="2026-08-12 00:00:00",
+    )
+
+    companies = list_companies_with_contacts(conn)
+    example_org = next(c for c in companies if c["name"] == "Example Org")
+
+    assert example_org["open_opportunities"] == 1  # the Closed one is excluded
+    assert [a["subject"] for a in example_org["activity"]] == ["Re: Pricing question", "Pricing question"]
+
+
+def test_list_companies_with_contacts_caps_activity_at_five(tmp_db_path):
+    conn = _conn(tmp_db_path)
+    project_id = create_project(conn, "Nexy")
+    org_id = create_organization(conn, "Example Org")
+    contact_id = create_contact(conn, "Jane Smith", email="jane@example.org")
+    link_contact_to_project(conn, project_id, contact_id, organization_id=org_id)
+
+    for i in range(7):
+        create_interaction(
+            conn, project_id, contact_id,
+            channel="email", direction="outbound", subject=f"Message {i}",
+            ai_summary=None, intent=None, external_message_id=None,
+            created_at=f"2026-08-{10 + i:02d} 00:00:00",
+        )
+
+    companies = list_companies_with_contacts(conn)
+    example_org = next(c for c in companies if c["name"] == "Example Org")
+
+    assert len(example_org["activity"]) == 5
+    assert example_org["activity"][0]["subject"] == "Message 6"  # newest first
+
+
+def test_list_companies_with_contacts_individuals_bucket_has_no_opportunity_fields(tmp_db_path):
+    conn = _conn(tmp_db_path)
+    project_id = create_project(conn, "Nexy")
+    contact_id = create_contact(conn, "Solo Tester")
+    link_contact_to_project(conn, project_id, contact_id, organization_id=None)
+
+    companies = list_companies_with_contacts(conn)
+
+    assert companies[0]["name"] == "Individuals"
+    assert "open_opportunities" not in companies[0]
+    assert "activity" not in companies[0]
