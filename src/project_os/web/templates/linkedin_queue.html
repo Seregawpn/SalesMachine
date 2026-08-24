@@ -5,10 +5,11 @@
 
 <div class="board">
   <section class="board-col" aria-labelledby="to-connect-heading">
-    <h3 class="board-col-header" id="to-connect-heading">To connect</h3>
+    <h3 class="board-col-header" id="to-connect-heading">To connect<span class="board-col-count">{{ queue["to_connect"] | length }}</span></h3>
     {% for row in queue["to_connect"] %}
     <div class="li-row" id="li-row-{{ row['id'] }}">
       <div class="li-row-name">{{ row["name"] }}</div>
+      {% if row["role"] %}<div class="li-row-role">{{ row["role"] }}</div>{% endif %}
       <div class="li-row-actions">
         <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
               hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
@@ -24,10 +25,11 @@
   </section>
 
   <section class="board-col" aria-labelledby="pending-recheck-heading">
-    <h3 class="board-col-header" id="pending-recheck-heading">Pending connections to re-check</h3>
+    <h3 class="board-col-header" id="pending-recheck-heading">Pending connections to re-check<span class="board-col-count">{{ queue["pending_recheck"] | length }}</span></h3>
     {% for row in queue["pending_recheck"] %}
     <div class="li-row" id="li-row-{{ row['id'] }}">
       <div class="li-row-name">{{ row["name"] }}</div>
+      {% if row["role"] %}<div class="li-row-role">{{ row["role"] }}</div>{% endif %}
       <div class="li-row-actions">
         <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
               hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
@@ -49,10 +51,11 @@
   </section>
 
   <section class="board-col" aria-labelledby="awaiting-message-heading">
-    <h3 class="board-col-header" id="awaiting-message-heading">Accepted connections awaiting a message</h3>
+    <h3 class="board-col-header" id="awaiting-message-heading">Accepted connections awaiting a message<span class="board-col-count">{{ queue["awaiting_message"] | length }}</span></h3>
     {% for row in queue["awaiting_message"] %}
     <div class="li-row" id="li-row-{{ row['id'] }}">
       <div class="li-row-name">{{ row["name"] }}</div>
+      {% if row["role"] %}<div class="li-row-role">{{ row["role"] }}</div>{% endif %}
       <div class="li-row-actions">
         <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
               hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
@@ -68,10 +71,11 @@
   </section>
 
   <section class="board-col" aria-labelledby="awaiting-reply-heading">
-    <h3 class="board-col-header" id="awaiting-reply-heading">Conversations awaiting reply</h3>
+    <h3 class="board-col-header" id="awaiting-reply-heading">Conversations awaiting reply<span class="board-col-count">{{ queue["awaiting_reply"] | length }}</span></h3>
     {% for row in queue["awaiting_reply"] %}
     <div class="li-row" id="li-row-{{ row['id'] }}">
       <div class="li-row-name">{{ row["name"] }}</div>
+      {% if row["role"] %}<div class="li-row-role">{{ row["role"] }}</div>{% endif %}
       <div class="li-row-actions">
         <form method="post" action="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"
               hx-post="/projects/{{ project_id }}/linkedin/{{ row['id'] }}/state"

@@ -193,6 +193,9 @@ input, select, textarea { font: inherit; border: 1px solid var(--border); border
 .company-people { background: var(--row-alt-bg); padding: 0 18px 14px 34px; }
 .company-people table { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
 
+.board-col-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-left: 6px; }
+.li-row-role { color: var(--text-secondary); font-size: 13px; margin-top: -4px; }
+
 .flash-error {
   background: var(--error-bg);
   color: var(--error-fg);
