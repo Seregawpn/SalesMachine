@@ -3,6 +3,7 @@
 {% block content %}
 <p id="flash-banner" role="alert" class="flash-error"{% if not error %} hidden{% endif %}>{{ error or "" }}</p>
 <h2>Action Center</h2>
+<div class="table-card">
 <table>
   <caption class="sr-only">Open actions across all projects</caption>
   <thead>
@@ -23,4 +24,5 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}
