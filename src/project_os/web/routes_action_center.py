@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from project_os.db import get_connection
 from project_os.repositories.actions import list_open_actions, complete_action, snooze_action, get_reply_context
+from project_os.repositories.opportunities import count_opportunities_by_stage
 from project_os.repositories.interactions import create_interaction
 from project_os.ai.mail_send_mcp_server import send_via_jxa, MailSendError
 from project_os.web.routes_emails import render_email_detail
@@ -37,6 +38,7 @@ def action_center(request: Request):
     try:
         actions = list_open_actions(conn)
         reply_contexts = {action["id"]: get_reply_context(conn, action["id"]) for action in actions}
+        funnel = count_opportunities_by_stage(conn)
     finally:
         conn.close()
     return request.app.state.templates.TemplateResponse(
@@ -45,6 +47,7 @@ def action_center(request: Request):
             "actions": actions,
             "reply_contexts": reply_contexts,
             "error": request.query_params.get("error"),
+            "funnel": funnel,
         },
     )
 

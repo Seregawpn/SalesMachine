@@ -118,3 +118,21 @@ def get_opportunity_for_contact(
         "SELECT * FROM opportunities WHERE project_id = ? AND contact_id = ? ORDER BY id LIMIT 1",
         (project_id, contact_id),
     ).fetchone()
+
+
+def count_opportunities_by_stage(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT stage, COUNT(*) AS count FROM opportunities GROUP BY stage"
+    ).fetchall()
+    counts = {row["stage"]: row["count"] for row in rows}
+    ordered = [
+        {"stage": stage, "count": counts[stage]}
+        for stage in STAGES
+        if counts.get(stage)
+    ]
+    if not ordered:
+        return []
+    max_count = max(item["count"] for item in ordered)
+    for item in ordered:
+        item["width_pct"] = round(item["count"] / max_count * 100)
+    return ordered

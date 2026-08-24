@@ -3,6 +3,17 @@
 {% block content %}
 <p id="flash-banner" role="alert" class="flash-error"{% if not error %} hidden{% endif %}>{{ error or "" }}</p>
 <h2>Action Center</h2>
+{% if funnel %}
+<div class="table-card funnel-card">
+  {% for row in funnel %}
+  <div class="funnel-row">
+    <span>{{ row["stage"] }}</span>
+    <div class="funnel-track"><div class="funnel-fill" style="width: {{ row['width_pct'] }}%;"></div></div>
+    <span class="funnel-count">{{ row["count"] }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
 <div class="table-card">
 <table>
   <caption class="sr-only">Open actions across all projects</caption>

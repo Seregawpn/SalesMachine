@@ -8,6 +8,7 @@ from project_os.db import get_connection, run_migrations
 from project_os.repositories.projects import create_project
 from project_os.repositories.actions import create_action, list_open_actions
 from project_os.repositories.contacts import create_contact, link_contact_to_project
+from project_os.repositories.opportunities import create_opportunity
 from project_os.repositories.interactions import create_interaction
 from project_os.ai.mail_send_mcp_server import MailSendError
 
@@ -437,3 +438,31 @@ def test_sending_a_reply_without_view_field_still_redirects_to_action_center(tmp
 
     assert response.status_code == 303
     assert response.headers["location"] == "/action-center"
+
+
+def test_action_center_shows_funnel_bars_for_stages_with_opportunities(tmp_db_path):
+    conn = get_connection(tmp_db_path)
+    run_migrations(conn, MIGRATIONS_DIR)
+    project_id = create_project(conn, "Nexy")
+    contact_id = create_contact(conn, "Jane Smith")
+    create_opportunity(conn, project_id, contact_id=contact_id, stage="Contacted")
+    conn.close()
+    client = TestClient(create_app(tmp_db_path))
+
+    response = client.get("/action-center")
+
+    assert response.status_code == 200
+    assert "Contacted" in response.text
+    assert "funnel-row" in response.text
+
+
+def test_action_center_shows_no_funnel_section_when_there_are_no_opportunities(tmp_db_path):
+    conn = get_connection(tmp_db_path)
+    run_migrations(conn, MIGRATIONS_DIR)
+    conn.close()
+    client = TestClient(create_app(tmp_db_path))
+
+    response = client.get("/action-center")
+
+    assert response.status_code == 200
+    assert "funnel-row" not in response.text

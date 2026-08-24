@@ -10,6 +10,7 @@ from project_os.repositories.opportunities import (
     set_next_action,
     list_pipeline,
     get_opportunity_for_contact,
+    count_opportunities_by_stage,
 )
 from project_os.pipeline import STAGES
 
@@ -142,3 +143,29 @@ def test_get_opportunity_for_contact_finds_existing(tmp_db_path):
 
     found = get_opportunity_for_contact(conn, project_id, contact_id)
     assert found["id"] == opp_id
+
+
+def test_count_opportunities_by_stage_omits_zero_count_stages(tmp_db_path):
+    conn = get_connection(tmp_db_path)
+    run_migrations(conn, MIGRATIONS_DIR)
+    project_id = create_project(conn, "Nexy")
+    contact_a = create_contact(conn, "Jane Smith")
+    contact_b = create_contact(conn, "John Doe")
+    contact_c = create_contact(conn, "Alex Lee")
+    create_opportunity(conn, project_id, contact_id=contact_a, stage="Research")
+    create_opportunity(conn, project_id, contact_id=contact_b, stage="Research")
+    create_opportunity(conn, project_id, contact_id=contact_c, stage="Contacted")
+
+    result = count_opportunities_by_stage(conn)
+
+    assert result == [
+        {"stage": "Research", "count": 2, "width_pct": 100},
+        {"stage": "Contacted", "count": 1, "width_pct": 50},
+    ]
+
+
+def test_count_opportunities_by_stage_is_empty_with_no_opportunities(tmp_db_path):
+    conn = get_connection(tmp_db_path)
+    run_migrations(conn, MIGRATIONS_DIR)
+
+    assert count_opportunities_by_stage(conn) == []

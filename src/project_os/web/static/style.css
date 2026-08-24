@@ -231,3 +231,9 @@ input, select, textarea { font: inherit; border: 1px solid var(--border); border
   font-size: 14px;
   color: var(--text-secondary);
 }
+
+.funnel-card { padding: 14px 18px; }
+.funnel-row { display: grid; grid-template-columns: 160px 1fr 40px; gap: 12px; align-items: center; padding: 6px 0; }
+.funnel-track { height: 20px; background: var(--row-alt-bg); border-radius: 4px; overflow: hidden; }
+.funnel-fill { height: 100%; background: var(--accent); border-radius: 4px; }
+.funnel-count { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-secondary); text-align: right; }
