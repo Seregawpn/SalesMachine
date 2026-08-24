@@ -3,7 +3,7 @@ from pathlib import Path
 from project_os.db import get_connection, run_migrations
 from project_os.repositories.projects import create_project
 from project_os.repositories.contacts import create_contact
-from project_os.repositories.interactions import create_interaction, get_interaction_by_external_id, list_interactions
+from project_os.repositories.interactions import create_interaction, get_interaction_by_external_id, list_interactions, interaction_exists
 
 MIGRATIONS_DIR = Path(__file__).parent.parent / "src" / "project_os" / "migrations"
 
@@ -100,3 +100,39 @@ def test_list_interactions_respects_the_limit(tmp_db_path):
     interactions = list_interactions(conn, limit=2)
 
     assert len(interactions) == 2
+
+
+def test_create_interaction_accepts_explicit_created_at(tmp_db_path):
+    conn = get_connection(tmp_db_path)
+    run_migrations(conn, MIGRATIONS_DIR)
+    project_id = create_project(conn, "Nexy")
+    contact_id = create_contact(conn, "Jane Smith", email="jane@example.org")
+
+    interaction_id = create_interaction(
+        conn, project_id, contact_id,
+        channel="Email", direction="outbound", subject="Intro",
+        ai_summary=None, intent=None, external_message_id=None,
+        source="import-nexy-sheet", created_at="2026-08-10 00:00:00",
+    )
+
+    row = conn.execute("SELECT created_at FROM interactions WHERE id = ?", (interaction_id,)).fetchone()
+    assert row["created_at"] == "2026-08-10 00:00:00"
+
+
+def test_interaction_exists_detects_duplicates(tmp_db_path):
+    conn = get_connection(tmp_db_path)
+    run_migrations(conn, MIGRATIONS_DIR)
+    project_id = create_project(conn, "Nexy")
+    contact_id = create_contact(conn, "Jane Smith", email="jane@example.org")
+
+    assert interaction_exists(conn, contact_id, "Intro", "2026-08-10 00:00:00") is False
+
+    create_interaction(
+        conn, project_id, contact_id,
+        channel="Email", direction="outbound", subject="Intro",
+        ai_summary=None, intent=None, external_message_id=None,
+        created_at="2026-08-10 00:00:00",
+    )
+
+    assert interaction_exists(conn, contact_id, "Intro", "2026-08-10 00:00:00") is True
+    assert interaction_exists(conn, contact_id, "Different subject", "2026-08-10 00:00:00") is False
