@@ -9,15 +9,20 @@ def create_opportunity(
     contact_id: int | None = None,
     organization_id: int | None = None,
     stage: str = "Research",
+    offer: str | None = None,
+    blocker: str | None = None,
+    next_action: str | None = None,
+    next_action_due: str | None = None,
 ) -> int:
     if stage not in STAGES:
         raise ValueError(f"Unknown stage: {stage}")
     cur = conn.execute(
         """
-        INSERT INTO opportunities (project_id, contact_id, organization_id, stage)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO opportunities
+            (project_id, contact_id, organization_id, stage, offer, blocker, next_action, next_action_due)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (project_id, contact_id, organization_id, stage),
+        (project_id, contact_id, organization_id, stage, offer, blocker, next_action, next_action_due),
     )
     return cur.lastrowid
 
@@ -103,4 +108,13 @@ def get_pipeline_row(conn: sqlite3.Connection, opportunity_id: int) -> sqlite3.R
         WHERE o.id = ?
         """,
         (opportunity_id,),
+    ).fetchone()
+
+
+def get_opportunity_for_contact(
+    conn: sqlite3.Connection, project_id: int, contact_id: int
+) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM opportunities WHERE project_id = ? AND contact_id = ? ORDER BY id LIMIT 1",
+        (project_id, contact_id),
     ).fetchone()

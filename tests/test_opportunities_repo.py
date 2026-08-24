@@ -9,6 +9,7 @@ from project_os.repositories.opportunities import (
     update_stage,
     set_next_action,
     list_pipeline,
+    get_opportunity_for_contact,
 )
 from project_os.pipeline import STAGES
 
@@ -108,3 +109,36 @@ def test_list_pipeline_orders_by_pipeline_stage_not_alphabetically(tmp_db_path):
     rows = list_pipeline(conn, project_id)
 
     assert [r["id"] for r in rows] == [research_id, contacted_id, paid_id]
+
+
+def test_create_opportunity_accepts_offer_blocker_and_next_action(tmp_db_path):
+    conn = get_connection(tmp_db_path)
+    run_migrations(conn, MIGRATIONS_DIR)
+    project_id = create_project(conn, "Nexy")
+    contact_id = create_contact(conn, "Jane Smith")
+    org_id = create_organization(conn, "Example Org")
+
+    opp_id = create_opportunity(
+        conn, project_id, contact_id=contact_id, organization_id=org_id, stage="Research",
+        offer="Pilot", blocker="Waiting on legal", next_action="Follow up", next_action_due="2026-09-01",
+    )
+
+    row = conn.execute("SELECT * FROM opportunities WHERE id = ?", (opp_id,)).fetchone()
+    assert row["offer"] == "Pilot"
+    assert row["blocker"] == "Waiting on legal"
+    assert row["next_action"] == "Follow up"
+    assert row["next_action_due"] == "2026-09-01"
+
+
+def test_get_opportunity_for_contact_finds_existing(tmp_db_path):
+    conn = get_connection(tmp_db_path)
+    run_migrations(conn, MIGRATIONS_DIR)
+    project_id = create_project(conn, "Nexy")
+    contact_id = create_contact(conn, "Jane Smith")
+
+    assert get_opportunity_for_contact(conn, project_id, contact_id) is None
+
+    opp_id = create_opportunity(conn, project_id, contact_id=contact_id)
+
+    found = get_opportunity_for_contact(conn, project_id, contact_id)
+    assert found["id"] == opp_id
